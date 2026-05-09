@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, ExternalLink, Download, Edit3, Check, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import { api } from '../api'
 import UpdateTimeline from '../components/UpdateTimeline'
 
@@ -121,7 +122,7 @@ export default function ProjectDetail() {
           <div>
             {project.readme_content ? (
               <div className="markdown-body text-sm text-gray-700 max-h-[600px] overflow-y-auto border border-gray-100 rounded-md p-4 bg-gray-50/50">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                   {project.readme_content}
                 </ReactMarkdown>
               </div>
