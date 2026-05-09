@@ -15,8 +15,37 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Stats endpoint
+app.get('/api/stats', (req, res) => {
+  try {
+    const db = require('./db');
+    const totalProjects = db.prepare('SELECT COUNT(*) as count FROM projects WHERE is_active = 1').get();
+    const updatedProjects = db.prepare('SELECT COUNT(*) as count FROM projects WHERE is_active = 1 AND has_updates = 1').get();
+    const todayUpdates = db.prepare(`
+      SELECT COUNT(*) as count FROM update_logs
+      WHERE status = 'success' AND date(pull_time) = date('now', 'localtime')
+    `).get();
+    const lastCheck = db.prepare(`
+      SELECT pull_time FROM update_logs ORDER BY pull_time DESC LIMIT 1
+    `).get();
+    res.json({
+      totalProjects: totalProjects.count,
+      updatedProjects: updatedProjects.count,
+      todayUpdates: todayUpdates.count,
+      lastCheckAt: lastCheck ? lastCheck.pull_time : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const projectsRouter = require('./routes/projects');
 app.use('/api/projects', projectsRouter);
+
+const updatesRouter = require('./routes/updates');
+const configRouter = require('./routes/config');
+app.use('/api/projects', updatesRouter);
+app.use('/api/config', configRouter);
 
 // Serve static frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
