@@ -1,0 +1,112 @@
+const fs = require('fs');
+const path = require('path');
+const simpleGit = require('simple-git');
+
+const db = require('../db');
+
+function getConfig(key) {
+  const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+async function getRepoInfo(dirPath) {
+  const git = simpleGit(dirPath);
+  try {
+    const isRepo = await git.checkIsRepo();
+    if (!isRepo) return null;
+  } catch {
+    return null;
+  }
+
+  const remotes = await git.getRemotes(true);
+  const origin = remotes.find(r => r.name === 'origin');
+  const remoteUrl = origin ? origin.refs.fetch : null;
+
+  let defaultBranch = 'main';
+  try {
+    const branchSummary = await git.branch();
+    defaultBranch = branchSummary.current;
+  } catch {}
+
+  const log = await git.log({ maxCount: 1 });
+  const lastCommit = log.latest;
+  const lastCommitHash = lastCommit ? lastCommit.hash : null;
+  const lastCommitDate = lastCommit ? lastCommit.date : null;
+  const lastCommitMsg = lastCommit ? lastCommit.message : null;
+
+  // Try to extract README first paragraph
+  let autoDescription = '';
+  const readmeFiles = ['README.md', 'readme.md', 'README.MD', 'Readme.md', 'README'];
+  for (const f of readmeFiles) {
+    const readmePath = path.join(dirPath, f);
+    if (fs.existsSync(readmePath)) {
+      const content = fs.readFileSync(readmePath, 'utf-8');
+      const lines = content.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.length > 30 && !trimmed.startsWith('#') && !trimmed.startsWith('![') && !trimmed.startsWith('[!')) {
+          autoDescription = trimmed.substring(0, 300);
+          break;
+        }
+      }
+      break;
+    }
+  }
+
+  return { remoteUrl, defaultBranch, lastCommitHash, lastCommitDate, lastCommitMsg, autoDescription };
+}
+
+async function scanDirectory() {
+  const basePath = getConfig('repo_base_path');
+  if (!basePath || !fs.existsSync(basePath)) {
+    console.error(`Base path not found: ${basePath}`);
+    return { added: [], removed: [], updated: [] };
+  }
+
+  const entries = fs.readdirSync(basePath, { withFileTypes: true });
+  const dirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+
+  const existingProjects = db.prepare('SELECT id, name, path FROM projects WHERE is_active = 1').all();
+  const existingPaths = new Set(existingProjects.map(p => path.normalize(p.path)));
+
+  const scannedNames = new Set();
+  const added = [];
+  const updated = [];
+
+  const insertStmt = db.prepare(`
+    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, last_commit_hash, last_commit_date, last_commit_msg)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateStmt = db.prepare(`
+    UPDATE projects SET remote_url = ?, default_branch = ?, auto_description = ?, last_commit_hash = ?, last_commit_date = ?, last_commit_msg = ?, updated_at = datetime('now', 'localtime'), is_active = 1
+    WHERE path = ?
+  `);
+
+  for (const dirName of dirs) {
+    const dirPath = path.join(basePath, dirName);
+    const normalPath = path.normalize(dirPath);
+    scannedNames.add(dirName);
+
+    const info = await getRepoInfo(dirPath);
+    if (!info) continue; // Skip non-git directories
+
+    if (existingPaths.has(normalPath)) {
+      updateStmt.run(info.remoteUrl, info.defaultBranch, info.autoDescription, info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg, normalPath);
+      updated.push(dirName);
+    } else {
+      insertStmt.run(dirName, normalPath, info.remoteUrl, info.defaultBranch, info.autoDescription, info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg);
+      added.push(dirName);
+    }
+  }
+
+  // Mark removed projects as inactive
+  const removedProjects = existingProjects.filter(p => !scannedNames.has(p.name));
+  const deactivateStmt = db.prepare("UPDATE projects SET is_active = 0, updated_at = datetime('now', 'localtime') WHERE name = ?");
+  for (const p of removedProjects) {
+    deactivateStmt.run(p.name);
+  }
+
+  return { added, removed: removedProjects.map(p => p.name), updated };
+}
+
+module.exports = { scanDirectory };
