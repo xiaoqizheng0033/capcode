@@ -16,7 +16,7 @@ export default function UpdateTimeline({ updates }) {
               u.status === 'failed' ? 'bg-red-100 text-red-700' :
               'bg-gray-100 text-gray-500'
             }`}>
-              {u.status === 'success' ? `${u.commits_count} commits` :
+              {u.status === 'success' ? `${u.commits_count} 个提交` :
                u.status === 'failed' ? '失败' : '无变化'}
             </span>
           </div>

@@ -3,6 +3,7 @@ const path = require('path');
 const simpleGit = require('simple-git');
 
 const db = require('../db');
+const { translateEnToZh } = require('./translate');
 
 function getConfig(key) {
   const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
@@ -34,13 +35,16 @@ async function getRepoInfo(dirPath) {
   const lastCommitDate = lastCommit ? lastCommit.date : null;
   const lastCommitMsg = lastCommit ? lastCommit.message : null;
 
-  // Try to extract README first paragraph
+  // Try to extract README first paragraph AND full content
   let autoDescription = '';
+  let readmeContent = '';
   const readmeFiles = ['README.md', 'readme.md', 'README.MD', 'Readme.md', 'README'];
   for (const f of readmeFiles) {
     const readmePath = path.join(dirPath, f);
     if (fs.existsSync(readmePath)) {
       const content = fs.readFileSync(readmePath, 'utf-8');
+      readmeContent = content;
+      // Extract first meaningful paragraph for autoDescription
       const lines = content.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
@@ -53,7 +57,12 @@ async function getRepoInfo(dirPath) {
     }
   }
 
-  return { remoteUrl, defaultBranch, lastCommitHash, lastCommitDate, lastCommitMsg, autoDescription };
+  // Translate English description to Chinese
+  if (autoDescription) {
+    autoDescription = await translateEnToZh(autoDescription);
+  }
+
+  return { remoteUrl, defaultBranch, lastCommitHash, lastCommitDate, lastCommitMsg, autoDescription, readmeContent };
 }
 
 async function scanDirectory() {
@@ -74,11 +83,11 @@ async function scanDirectory() {
   const updated = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, last_commit_hash, last_commit_date, last_commit_msg)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, readme_content, last_commit_hash, last_commit_date, last_commit_msg)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateStmt = db.prepare(`
-    UPDATE projects SET remote_url = ?, default_branch = ?, auto_description = ?, last_commit_hash = ?, last_commit_date = ?, last_commit_msg = ?, updated_at = datetime('now', 'localtime'), is_active = 1
+    UPDATE projects SET remote_url = ?, default_branch = ?, auto_description = ?, readme_content = ?, last_commit_hash = ?, last_commit_date = ?, last_commit_msg = ?, updated_at = datetime('now', 'localtime'), is_active = 1
     WHERE path = ?
   `);
 
@@ -91,10 +100,10 @@ async function scanDirectory() {
     if (!info) continue; // Skip non-git directories
 
     if (existingPaths.has(normalPath)) {
-      updateStmt.run(info.remoteUrl, info.defaultBranch, info.autoDescription, info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg, normalPath);
+      updateStmt.run(info.remoteUrl, info.defaultBranch, info.autoDescription, info.readmeContent, info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg, normalPath);
       updated.push(dirName);
     } else {
-      insertStmt.run(dirName, normalPath, info.remoteUrl, info.defaultBranch, info.autoDescription, info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg);
+      insertStmt.run(dirName, normalPath, info.remoteUrl, info.defaultBranch, info.autoDescription, info.readmeContent, info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg);
       added.push(dirName);
     }
   }

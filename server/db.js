@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS projects (
   default_branch TEXT DEFAULT 'main',
   description TEXT DEFAULT '',
   auto_description TEXT DEFAULT '',
+  readme_content TEXT DEFAULT '',
   last_commit_hash TEXT,
   last_commit_date TEXT,
   last_commit_msg TEXT,
@@ -87,6 +88,13 @@ const _initPromise = (async () => {
 
     // Create tables
     _db.run(SCHEMA_SQL);
+
+    // Migration: add readme_content column if not exists
+    try {
+      _db.run("ALTER TABLE projects ADD COLUMN readme_content TEXT DEFAULT ''");
+    } catch (e) {
+      // Column already exists, ignore
+    }
 
     // Insert default config values
     const cntResult = _db.exec('SELECT COUNT(*) AS cnt FROM config');

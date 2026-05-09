@@ -2,6 +2,7 @@ const simpleGit = require('simple-git');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db');
+const { translateEnToZh } = require('./translate');
 
 function getConfig(key) {
   const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
@@ -113,13 +114,15 @@ async function cloneRepo(githubUrl) {
   const git = simpleGit(basePath);
   await git.clone(githubUrl, repoName, ['--depth', '1']);
 
-  // After clone, scan README to get description
+  // After clone, scan README to get description and full content
   let autoDescription = '';
+  let readmeContent = '';
   const readmeFiles = ['README.md', 'readme.md', 'README.MD', 'Readme.md', 'README'];
   for (const f of readmeFiles) {
     const readmePath = path.join(targetPath, f);
     if (fs.existsSync(readmePath)) {
       const content = fs.readFileSync(readmePath, 'utf-8');
+      readmeContent = content;
       const lines = content.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
@@ -130,6 +133,11 @@ async function cloneRepo(githubUrl) {
       }
       break;
     }
+  }
+
+  // Translate English description to Chinese
+  if (autoDescription) {
+    autoDescription = await translateEnToZh(autoDescription);
   }
 
   // Get git info
@@ -148,10 +156,10 @@ async function cloneRepo(githubUrl) {
   const lastCommit = log.latest;
 
   const result = db.prepare(`
-    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, last_commit_hash, last_commit_date, last_commit_msg)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, readme_content, last_commit_hash, last_commit_date, last_commit_msg)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    repoName, path.normalize(targetPath), remoteUrl, defaultBranch, autoDescription,
+    repoName, path.normalize(targetPath), remoteUrl, defaultBranch, autoDescription, readmeContent,
     lastCommit?.hash || null, lastCommit?.date || null, lastCommit?.message || null
   );
 

@@ -25,7 +25,12 @@ export default function Dashboard() {
     }
   }, [search])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+    // 启动后自动 pull 约 10s 后执行，延迟刷新获取最新结果
+    const timer = setTimeout(() => loadData(), 15000)
+    return () => clearTimeout(timer)
+  }, [loadData])
 
   async function handleScan() {
     try {

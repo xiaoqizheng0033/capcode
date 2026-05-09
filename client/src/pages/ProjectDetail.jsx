@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, ExternalLink, Download, Edit3, Check, X } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { api } from '../api'
 import UpdateTimeline from '../components/UpdateTimeline'
 
@@ -34,7 +36,7 @@ export default function ProjectDetail() {
       await api.pullProject(id)
       await loadData()
     } catch (err) {
-      alert('Pull 失败: ' + err.message)
+      alert('拉取失败: ' + err.message)
     } finally {
       setPulling(false)
     }
@@ -88,7 +90,7 @@ export default function ProjectDetail() {
           disabled={pulling}
           className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
         >
-          <Download size={16} /> {pulling ? 'Pull 中...' : '立即 Pull'}
+          <Download size={16} /> {pulling ? '拉取中...' : '立即拉取'}
         </button>
       </div>
 
@@ -117,7 +119,15 @@ export default function ProjectDetail() {
           </div>
         ) : (
           <div>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">{displayDesc}</p>
+            {project.readme_content ? (
+              <div className="markdown-body text-sm text-gray-700 max-h-[600px] overflow-y-auto border border-gray-100 rounded-md p-4 bg-gray-50/50">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {project.readme_content}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{displayDesc}</p>
+            )}
             {!project.description && project.auto_description && (
               <p className="text-xs text-gray-400 mt-1">自动提取自 README</p>
             )}
