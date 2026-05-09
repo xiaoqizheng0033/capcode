@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Markdown content styles */
 .markdown-body h1 { font-size: 1.5rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 0.5rem; }
 .markdown-body h2 { font-size: 1.25rem; font-weight: 600; margin-top: 1.25rem; margin-bottom: 0.5rem; }
@@ -17,3 +19,16 @@
 .markdown-body a { color: #2563eb; text-decoration: underline; }
 .markdown-body img { max-width: 100%; height: auto; }
 .markdown-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
+
+/* Dark mode markdown overrides */
+.dark .markdown-body { color: #d1d5db; }
+.dark .markdown-body h1,
+.dark .markdown-body h2,
+.dark .markdown-body h3 { color: #f3f4f6; }
+.dark .markdown-body code { background: #374151; color: #e5e7eb; }
+.dark .markdown-body pre { background: #0f172a; color: #e2e8f0; }
+.dark .markdown-body th { background: #1e293b; border-color: #475569; }
+.dark .markdown-body td { border-color: #475569; }
+.dark .markdown-body blockquote { border-left-color: #4b5563; color: #9ca3af; }
+.dark .markdown-body a { color: #60a5fa; }
+.dark .markdown-body hr { border-top-color: #374151; }
