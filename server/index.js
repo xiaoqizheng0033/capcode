@@ -9,6 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 const db = require('./db');
+const { startScheduler } = require('./services/scheduler');
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -25,6 +26,7 @@ app.get('*', (req, res, next) => {
 // Wait for DB initialisation before starting the server
 db.ready().then(() => {
   console.log('Database initialized at:', db.name);
+  startScheduler();
   app.listen(PORT, () => {
     console.log(`Repo Manager running at http://localhost:${PORT}`);
   });
