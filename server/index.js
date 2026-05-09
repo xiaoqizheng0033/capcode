@@ -8,6 +8,8 @@ const PORT = process.env.PORT || 3456;
 app.use(cors());
 app.use(express.json());
 
+const db = require('./db');
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -20,6 +22,10 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Repo Manager running at http://localhost:${PORT}`);
+// Wait for DB initialisation before starting the server
+db.ready().then(() => {
+  console.log('Database initialized at:', db.name);
+  app.listen(PORT, () => {
+    console.log(`Repo Manager running at http://localhost:${PORT}`);
+  });
 });
