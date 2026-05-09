@@ -15,6 +15,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+const projectsRouter = require('./routes/projects');
+app.use('/api/projects', projectsRouter);
+
 // Serve static frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist));
