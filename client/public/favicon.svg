@@ -1,17 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Eagle head silhouette on transparent bg -->
-  <path d="M50 15 L63 10 L75 16 Q82 20 76 28 L62 36 Q52 40 50 34 Z"
-    fill="#1e3a5f" stroke="#fbbf24" stroke-width="1.5"/>
-  <!-- Eye + magnifier -->
-  <circle cx="64" cy="20" r="3" fill="#fbbf24"/>
-  <circle cx="64" cy="20" r="1.2" fill="#1e3a5f"/>
-  <circle cx="64" cy="20" r="5" stroke="#fbbf24" stroke-width="1" fill="none"/>
-  <line x1="67.5" y1="23.5" x2="72" y2="28" stroke="#fbbf24" stroke-width="1"/>
-  <!-- Beak -->
-  <path d="M76 20 L88 18 L82 24 L76 25 Z" fill="#fbbf24" stroke="#d97706" stroke-width="0.5"/>
-  <!-- Code wing -->
-  <text x="10" y="65" fontSize="14" fill="#60a5fa" font-family="monospace" font-weight="bold">{ } < /></text>
-  <!-- AI badge -->
-  <circle cx="78" cy="65" r="10" fill="#fbbf24"/>
-  <text x="72" y="69" fontSize="9" fill="#1e3a5f" font-family="monospace" font-weight="bold">AI</text>
+  <!-- Cat head silhouette -->
+  <path d="M20 35 Q15 15 28 10 Q32 8 35 16 Q38 8 42 6 Q46 8 48 16 Q52 8 56 6 Q60 8 62 16 Q65 8 70 10 Q82 15 78 35
+    L78 40 Q85 55 85 75 Q85 90 75 90 Q70 90 70 85 Q70 78 62 78 L38 78 Q30 78 30 85 Q30 90 25 90 Q15 90 15 75 Q15 55 22 40 Z"
+    fill="#1a1a2e"/>
+  <!-- Ears inner -->
+  <path d="M30 14 L34 10 L36 16 Q33 18 30 14 Z" fill="#f472b6"/>
+  <path d="M66 16 L64 10 L68 14 Q65 18 66 16 Z" fill="#f472b6"/>
+  <!-- Eyes -->
+  <circle cx="38" cy="48" r="6" fill="#fbbf24"/>
+  <circle cx="62" cy="48" r="6" fill="#fbbf24"/>
+  <circle cx="40" cy="47" r="2.5" fill="#1a1a2e"/>
+  <circle cx="64" cy="47" r="2.5" fill="#1a1a2e"/>
+  <!-- Nose -->
+  <path d="M49 58 L50 61 L51 58 Z" fill="#f472b6"/>
+  <!-- Mouth -->
+  <path d="M42 64 Q50 70 58 64" stroke="#475569" strokeWidth="1" fill="none"/>
+  <!-- Cap (hat) -->
+  <path d="M25 33 Q28 16 50 16 Q72 16 75 33 L72 36 Q50 24 28 36 Z" fill="#fbbf24"/>
+  <!-- Code badge -->
+  <circle cx="78" cy="30" r="10" fill="#3b82f6"/>
+  <text x="72" y="34" fontSize="9" fill="#fff" fontFamily="monospace" fontWeight="bold">{ }</text>
 </svg>

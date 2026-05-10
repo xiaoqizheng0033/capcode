@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext'
 import { api } from '../api'
 import ProjectCard from '../components/ProjectCard'
 import CategoryGroup from '../components/CategoryGroup'
-import EagleLogo from '../components/EagleLogo'
+import CatLogo from '../components/CatLogo'
 import AddProjectModal from '../components/AddProjectModal'
 
 export default function Dashboard() {
@@ -56,8 +56,8 @@ export default function Dashboard() {
     <div className="max-w-5xl mx-auto px-4 py-6">
       <header className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <EagleLogo size={32} />
-          EagleCode
+          <CatLogo size={32} />
+          CapCode
         </h1>
         <div className="flex items-center gap-2">
           <button
