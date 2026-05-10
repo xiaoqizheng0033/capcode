@@ -33,7 +33,7 @@ function chatCompletion(messages) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Length': Buffer.byteLength(body),
       },
-      timeout: 30000,
+      timeout: 120000,
     };
 
     const req = https.request(options, (res) => {
@@ -113,6 +113,9 @@ ${readmePreview || 'N/A'}
 （列出项目的入口文件路径和核心模块目录）`;
 
   const content = await chatCompletion([{ role: 'user', content: prompt }]);
+  if (!content || content.trim().length < 10) {
+    throw new Error('AI returned empty or too short response');
+  }
   return content;
 }
 

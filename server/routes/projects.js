@@ -134,10 +134,12 @@ router.post('/regenerate-all-summaries', async (req, res) => {
     for (const proj of projects) {
       try {
         const summary = await generateSummary(proj);
+        console.log(`[Summary] ${proj.name}: ${summary.substring(0, 80)}...`);
         db.prepare("UPDATE projects SET ai_summary = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
           .run(summary, proj.id);
         results.push({ id: proj.id, name: proj.name, status: 'success' });
       } catch (err) {
+        console.error(`[Summary] ${proj.name} FAILED:`, err.message);
         results.push({ id: proj.id, name: proj.name, status: 'failed', error: err.message });
       }
     }
