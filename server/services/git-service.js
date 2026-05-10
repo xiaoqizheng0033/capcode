@@ -111,24 +111,23 @@ async function cloneRepo(githubUrl, onProgress) {
     throw new Error(`Directory already exists: ${repoName}`);
   }
 
-  // Use child_process directly to capture raw git stderr output
-  const { exec } = require('child_process');
+  // Use spawn to capture real-time git clone progress
+  const { spawn } = require('child_process');
   await new Promise((resolve, reject) => {
-    const child = exec(
-      `git clone "${githubUrl}" "${repoName}" --progress`,
-      { cwd: basePath },
-      (err, stdout, stderr) => {
-        if (err) reject(err);
-        else resolve();
-      }
-    );
-    child.stderr.on('data', (data) => {
-      const text = data.toString();
-      if (onProgress) onProgress(text);
+    const child = spawn('git', ['clone', githubUrl, repoName, '--progress'], {
+      cwd: basePath,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
     child.stdout.on('data', (data) => {
-      const text = data.toString();
-      if (onProgress) onProgress(text);
+      if (onProgress) onProgress(data.toString());
+    });
+    child.stderr.on('data', (data) => {
+      if (onProgress) onProgress(data.toString());
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`git clone exited with code ${code}`));
     });
   });
 

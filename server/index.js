@@ -44,6 +44,8 @@ app.post('/api/projects/clone', async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'url is required' });
 
+  // Bypass Express response buffering for SSE
+  res.socket.setNoDelay(true);
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -51,17 +53,20 @@ app.post('/api/projects/clone', async (req, res) => {
     'X-Accel-Buffering': 'no',
     'Access-Control-Allow-Origin': '*',
   });
+  // Send an initial comment to flush headers
+  res.write(':ok\n\n');
 
   let cancelled = false;
   req.on('close', () => { cancelled = true; });
 
   function send(type, data) {
-    if (!cancelled) res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (!cancelled) {
+      res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+    }
   }
 
   const { cloneRepo } = require('./services/git-service');
   try {
-    send('progress', { message: 'Cloning into...\n' });
     const project = await cloneRepo(url, (msg) => {
       send('progress', { message: msg });
     });
