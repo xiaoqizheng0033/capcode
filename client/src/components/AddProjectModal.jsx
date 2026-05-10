@@ -54,7 +54,26 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
             const data = JSON.parse(eventData)
             if (eventType === 'progress') {
               const lines = data.message.split('\n').filter(l => l.trim())
-              setLogs(prev => [...prev, ...lines.map(l => ({ type: 'info', text: l.trimEnd() }))])
+              setLogs(prev => {
+                const next = [...prev]
+                for (const line of lines) {
+                  const text = line.trimEnd()
+                  // Receiving/Resolving deltas: replace last line if it's the same type
+                  if (/^(Receiving|Resolving|remote:)/.test(text)) {
+                    // Find and replace last line of same prefix, or append
+                    const prefix = text.split(':')[0]
+                    const lastIdx = next.length - 1
+                    if (lastIdx >= 0 && next[lastIdx].text.startsWith(prefix)) {
+                      next[lastIdx] = { type: 'info', text }
+                    } else {
+                      next.push({ type: 'info', text })
+                    }
+                  } else {
+                    next.push({ type: 'info', text })
+                  }
+                }
+                return next
+              })
             } else if (eventType === 'done') {
               setLogs(prev => [...prev, { type: 'success', text: '克隆完成' }])
               setLoading(false)
