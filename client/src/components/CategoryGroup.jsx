@@ -24,10 +24,8 @@ export default function CategoryGroup({ category, projects, defaultOpen = true }
   const color = getColor(category)
 
   return (
-    <div className="mb-5 border-l-4 rounded-r-lg pl-3 transition-colors"
-      style={{ borderLeftColor: 'var(--tw-border-color)' }}
-    >
-      <div className={`border-l-4 ${color.bar} rounded-r-lg ${color.bg} -ml-3 pl-3 pr-3 py-2 mb-2`}>
+    <div className="mb-5">
+      <div className={`border-l-4 ${color.bar} rounded-r-lg ${color.bg} pl-3 pr-3 py-2 mb-2`}>
         <button
           onClick={() => setOpen(!open)}
           className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
