@@ -189,7 +189,7 @@ export default function Dashboard() {
         })()
       )}
 
-      <AddProjectModal open={showAddModal} onClose={() => setShowAddModal(false)} onAdded={() => { setShowAddModal(false); loadData() }} />
+      <AddProjectModal open={showAddModal} onClose={() => setShowAddModal(false)} onAdded={() => { loadData() }} />
     </div>
   )
 }
