@@ -92,7 +92,7 @@ async function pullRepo(projectId) {
   return { status: 'success', commitsCount: commits.length };
 }
 
-async function cloneRepo(githubUrl) {
+async function cloneRepo(githubUrl, onProgress) {
   // Validate URL format
   const urlPattern = /^https?:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?$/;
   const sshPattern = /^git@github\.com:[\w.-]+\/[\w.-]+(\.git)?$/;
@@ -111,8 +111,13 @@ async function cloneRepo(githubUrl) {
     throw new Error(`Directory already exists: ${repoName}`);
   }
 
-  const git = simpleGit(basePath);
-  await git.clone(githubUrl, repoName, ['--depth', '1']);
+  const git = simpleGit({
+    baseDir: basePath,
+    progress: ({ method, stage, progress }) => {
+      if (onProgress) onProgress(`[${stage}] ${method}: ${progress}%`);
+    },
+  });
+  await git.clone(githubUrl, repoName, ['--progress']);
 
   // After clone, scan README to get description and full content
   let autoDescription = '';
