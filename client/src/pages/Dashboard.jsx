@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
+  const [summaryResults, setSummaryResults] = useState(null)
   const { theme, toggleTheme } = useTheme()
 
   const loadData = useCallback(async () => {
@@ -153,7 +154,9 @@ export default function Dashboard() {
           onClick={async () => {
             try {
               showStatus('正在生成摘要...')
+              setSummaryResults(null)
               const result = await api.regenerateAllSummaries()
+              setSummaryResults(result.results || [])
               const ok = result.results?.filter(r => r.status === 'success').length || 0
               await loadData()
               showStatus(`摘要完成: ${ok}/${result.results?.length || 0}`)
@@ -166,6 +169,26 @@ export default function Dashboard() {
           生成摘要
         </button>
       </div>
+
+      {/* Summary generation results */}
+      {summaryResults && (
+        <div className="mb-4 bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">摘要生成结果</h3>
+            <button onClick={() => setSummaryResults(null)} className="text-gray-400 hover:text-gray-600 dark:text-gray-500"><X size={14} /></button>
+          </div>
+          <div className="max-h-64 overflow-y-auto text-xs">
+            {summaryResults.map((r, i) => (
+              <div key={i} className={`flex items-center gap-2 py-1 ${r.status === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                <span className="text-gray-400 dark:text-gray-500 w-5 text-right">{i + 1}.</span>
+                <span>{r.name}</span>
+                {r.status === 'success' ? <Check size={12} /> : <X size={12} />}
+                {r.status === 'failed' && <span className="text-red-400">- {r.error}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Project grid grouped by category */}
       {loading ? (
