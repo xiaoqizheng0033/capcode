@@ -162,6 +162,7 @@ export default function Dashboard() {
               showStatus(`摘要完成: ${ok}/${result.results?.length || 0}`)
             } catch (err) {
               showStatus('摘要失败: ' + err.message)
+              setSummaryResults([{ name: '请求失败', status: 'failed', error: err.message }])
             }
           }}
           className="flex items-center gap-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
