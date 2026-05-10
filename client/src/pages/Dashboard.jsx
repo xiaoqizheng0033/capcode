@@ -198,7 +198,7 @@ export default function Dashboard() {
         })()
       )}
 
-      <AddProjectModal open={showAddModal} onClose={() => setShowAddModal(false)} onAdded={(project) => { setProjects(prev => [...prev, project]); loadStats() }} />
+      <AddProjectModal open={showAddModal} onClose={() => setShowAddModal(false)} onAdded={(project) => { setProjects(prev => [...prev, project]); setStats(s => ({ ...s, totalProjects: s.totalProjects + 1 })) }} />
     </div>
   )
 }
