@@ -33,8 +33,7 @@ function startScheduler() {
   task = cron.schedule(cronExpression, runPullAll);
   console.log(`[Scheduler] Started with interval: ${intervalHours} hours (cron: ${cronExpression})`);
 
-  // Also run an initial pull on startup after 10 seconds
-  setTimeout(runPullAll, 10000);
+  // Startup pull disabled - wait for cron schedule
 }
 
 function stopScheduler() {
