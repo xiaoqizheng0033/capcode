@@ -1,27 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="100" y2="100">
-      <stop offset="0%" stop-color="#1e40af"/>
-      <stop offset="100%" stop-color="#1e3a5f"/>
-    </linearGradient>
-  </defs>
-  <circle cx="50" cy="50" r="48" fill="url(#bg)" stroke="#fbbf24" stroke-width="2"/>
-  <!-- Eagle silhouette -->
-  <path d="M50 22 L28 48 L18 54 L28 52 L28 78 L50 72 L72 78 L72 52 L82 54 L72 48 Z" fill="#1e3a5f" stroke="#fbbf24" stroke-width="1.5"/>
-  <!-- Wings code feathers -->
-  <text x="7" y="42" font-size="10" fill="#60a5fa" font-family="monospace" font-weight="bold">{ }</text>
-  <text x="60" y="42" font-size="10" fill="#60a5fa" font-family="monospace" font-weight="bold">< / ></text>
-  <!-- Head -->
-  <ellipse cx="50" cy="25" rx="9" ry="8" fill="#1e3a5f" stroke="#fbbf24" stroke-width="1.2"/>
-  <!-- Eyes -->
-  <circle cx="47" cy="24" r="2" fill="#fbbf24"/>
-  <circle cx="53" cy="24" r="2" fill="#fbbf24"/>
-  <circle cx="47" cy="24" r="0.8" fill="#1e3a5f"/>
-  <!-- Magnifier on right eye -->
-  <circle cx="53" cy="24" r="3.5" stroke="#fbbf24" stroke-width="0.7" fill="none"/>
-  <line x1="55.5" y1="26.5" x2="58" y2="29" stroke="#fbbf24" stroke-width="0.7"/>
+  <!-- Eagle head silhouette on transparent bg -->
+  <path d="M50 15 L63 10 L75 16 Q82 20 76 28 L62 36 Q52 40 50 34 Z"
+    fill="#1e3a5f" stroke="#fbbf24" stroke-width="1.5"/>
+  <!-- Eye + magnifier -->
+  <circle cx="64" cy="20" r="3" fill="#fbbf24"/>
+  <circle cx="64" cy="20" r="1.2" fill="#1e3a5f"/>
+  <circle cx="64" cy="20" r="5" stroke="#fbbf24" stroke-width="1" fill="none"/>
+  <line x1="67.5" y1="23.5" x2="72" y2="28" stroke="#fbbf24" stroke-width="1"/>
   <!-- Beak -->
-  <polygon points="50,28 47.5,30.5 50,32 52.5,30.5" fill="#fbbf24"/>
+  <path d="M76 20 L88 18 L82 24 L76 25 Z" fill="#fbbf24" stroke="#d97706" stroke-width="0.5"/>
+  <!-- Code wing -->
+  <text x="10" y="65" fontSize="14" fill="#60a5fa" font-family="monospace" font-weight="bold">{ } < /></text>
   <!-- AI badge -->
-  <text x="42" y="58" font-size="7" fill="#fbbf24" font-family="monospace" font-weight="bold">AI</text>
+  <circle cx="78" cy="65" r="10" fill="#fbbf24"/>
+  <text x="72" y="69" fontSize="9" fill="#1e3a5f" font-family="monospace" font-weight="bold">AI</text>
 </svg>

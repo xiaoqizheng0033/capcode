@@ -7,66 +7,55 @@ export default function EagleLogo({ size = 32 }) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Background circle */}
-      <circle cx="50" cy="50" r="48" fill="currentColor" className="text-blue-600 dark:text-blue-500" />
-
-      {/* Eagle body outline */}
+      {/* Eagle in flight - top-down silhouette */}
+      {/* Outstretched wings */}
       <path
-        d="M50 25 L30 50 L20 55 L30 52 L30 65 L30 75 L50 70 L70 75 L70 65 L70 52 L80 55 L70 50 Z"
+        d="M15 45 L50 35 L85 45 L82 28 L90 25 L78 22 L72 35 L50 28 L28 35 L22 22 L10 25 L18 28 Z"
         fill="#1e3a5f"
         stroke="#fbbf24"
-        strokeWidth="1.5"
+        strokeWidth="1.2"
       />
+      {/* Left wing code feathers */}
+      <text x="12" y="38" fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'{ }'}</text>
+      {/* Right wing code feathers */}
+      <text x="67" y="38" fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'< />'}</text>
 
-      {/* Left wing - code symbol feathers */}
-      <g transform="translate(28, 35) rotate(-25)">
-        <text fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'{'}</text>
-        <text x="8" y="2" fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'}'}</text>
-        <text x="5" y="12" fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'<'}</text>
-        <text x="14" y="14" fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'/'}</text>
+      {/* Broad tail feathers */}
+      <path d="M30 48 L50 55 L70 48 L68 60 L50 65 L32 60 Z"
+        fill="#1e3a5f" stroke="#fbbf24" strokeWidth="1"/>
+
+      {/* Eagle head - proud profile facing right */}
+      <path d="M50 22 L60 18 L68 22 Q72 24 68 28 L58 32 Q52 34 50 30 Z"
+        fill="#1e3a5f" stroke="#fbbf24" strokeWidth="1.3"/>
+
+      {/* Eye */}
+      <circle cx="60" cy="23" r="2.2" fill="#fbbf24"/>
+      <circle cx="60.5" cy="22.5" r="0.9" fill="#1e3a5f"/>
+
+      {/* Magnifier around eye */}
+      <circle cx="60" cy="23" r="4.2" stroke="#fbbf24" strokeWidth="0.8" fill="none"/>
+      <line x1="63" y1="26" x2="66" y2="29" stroke="#fbbf24" strokeWidth="0.8"/>
+
+      {/* Sharp hooked beak */}
+      <path d="M68 24 L78 22 L74 27 L68 28 Z" fill="#fbbf24" stroke="#d97706" strokeWidth="0.5"/>
+
+      {/* Talons holding git branch */}
+      <g transform="translate(32, 60)">
+        <circle cx="4" cy="2" r="4" stroke="#fbbf24" strokeWidth="0.8" fill="none"/>
+        <circle cx="4" cy="2" r="1.2" fill="#fbbf24"/>
+        <line x1="4" y1="6" x2="4" y2="11" stroke="#fbbf24" strokeWidth="0.8"/>
+        <line x1="4" y1="9" x2="1" y2="12" stroke="#fbbf24" strokeWidth="0.7"/>
+        <line x1="4" y1="9" x2="7" y2="12" stroke="#fbbf24" strokeWidth="0.7"/>
       </g>
 
-      {/* Right wing - code symbol feathers */}
-      <g transform="translate(58, 35) rotate(25)">
-        <text fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'>'}</text>
-        <text x="8" y="2" fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'<'}</text>
-        <text x="3" y="12" fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'/'}</text>
-        <text x="12" y="14" fontSize="9" fill="#60a5fa" fontFamily="monospace" fontWeight="bold">{'>'}</text>
+      {/* Talons holding folder */}
+      <g transform="translate(50, 60)">
+        <rect x="0" y="0" width="10" height="8" rx="1" fill="#606f8b" stroke="#fbbf24" strokeWidth="0.6"/>
+        <rect x="0" y="0" width="5" height="2" rx="0.5" fill="#fbbf24"/>
       </g>
 
-      {/* Head */}
-      <ellipse cx="50" cy="28" rx="10" ry="9" fill="#1e3a5f" stroke="#fbbf24" strokeWidth="1.2" />
-
-      {/* Eyes with magnifying glass */}
-      <circle cx="46" cy="27" r="2.5" fill="#fbbf24" />
-      <circle cx="54" cy="27" r="2.5" fill="#fbbf24" />
-      {/* Pupil + magnifier detail */}
-      <circle cx="46.5" cy="26.5" r="1" fill="#1e3a5f" />
-      <circle cx="54.5" cy="26.5" r="1" fill="#1e3a5f" />
-      {/* Magnifier ring around right eye */}
-      <circle cx="54" cy="27" r="4" stroke="#fbbf24" strokeWidth="0.8" fill="none" />
-      <line x1="57" y1="30" x2="60" y2="33" stroke="#fbbf24" strokeWidth="0.8" />
-
-      {/* Beak */}
-      <polygon points="50,31 47,34 50,36 53,34" fill="#fbbf24" />
-
-      {/* Talons holding Git branch icon */}
-      <g transform="translate(38, 72)">
-        <circle cx="5" cy="3" r="4" stroke="#fbbf24" strokeWidth="1" fill="none" />
-        <circle cx="5" cy="3" r="1.5" fill="#fbbf24" />
-        <line x1="5" y1="7" x2="5" y2="12" stroke="#fbbf24" strokeWidth="1" />
-        <line x1="5" y1="10" x2="2" y2="13" stroke="#fbbf24" strokeWidth="0.8" />
-        <line x1="5" y1="10" x2="8" y2="13" stroke="#fbbf24" strokeWidth="0.8" />
-      </g>
-
-      {/* Talons holding folder icon */}
-      <g transform="translate(52, 72)">
-        <rect x="0" y="0" width="10" height="8" rx="1" fill="#606f8b" stroke="#fbbf24" strokeWidth="0.5" />
-        <rect x="0" y="0" width="5" height="2" rx="0.5" fill="#fbbf24" />
-      </g>
-
-      {/* Chest - AI sparkle */}
-      <text x="42" y="55" fontSize="7" fill="#fbbf24" fontFamily="monospace">AI</text>
+      {/* AI Sparkle */}
+      <text x="53" y="82" fontSize="7" fill="#fbbf24" fontFamily="monospace" fontWeight="bold">AI</text>
     </svg>
   )
 }
