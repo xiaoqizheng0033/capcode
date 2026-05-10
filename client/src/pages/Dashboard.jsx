@@ -30,6 +30,15 @@ export default function Dashboard() {
     }
   }, [search])
 
+  const loadStats = useCallback(async () => {
+    try {
+      const s = await api.getStats()
+      setStats(s)
+    } catch (err) {
+      console.error(err)
+    }
+  }, [])
+
   useEffect(() => {
     loadData()
     const timer = setTimeout(() => loadData(), 15000)
@@ -189,7 +198,7 @@ export default function Dashboard() {
         })()
       )}
 
-      <AddProjectModal open={showAddModal} onClose={() => setShowAddModal(false)} onAdded={() => { loadData() }} />
+      <AddProjectModal open={showAddModal} onClose={() => setShowAddModal(false)} onAdded={(project) => { setProjects(prev => [...prev, project]); loadStats() }} />
     </div>
   )
 }
