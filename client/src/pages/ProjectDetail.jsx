@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useLocation, Link } from 'react-router-dom'
 import { ArrowLeft, ExternalLink, Download, Edit3, Check, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -10,6 +10,7 @@ import CollapsibleSection from '../components/CollapsibleSection'
 
 export default function ProjectDetail() {
   const { id } = useParams()
+  const location = useLocation()
   const [project, setProject] = useState(null)
   const [updates, setUpdates] = useState([])
   const [loading, setLoading] = useState(true)
@@ -42,14 +43,8 @@ export default function ProjectDetail() {
     }
   }, [id])
 
-  useEffect(() => { loadData() }, [loadData])
-
-  // Reload data when navigating back to this page
-  useEffect(() => {
-    const onFocus = () => loadData()
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [loadData])
+  // Reload on mount AND every route navigation to this page
+  useEffect(() => { setLoading(true); loadData() }, [loadData, location.key])
 
   async function handlePull() {
     setPulling(true)
