@@ -183,8 +183,7 @@ export default function Dashboard() {
                       setSummaryResults(prev => [...prev, data])
                     } else if (eventType === 'done') {
                       await loadData()
-                      const ok = summaryResults.length + 1
-                      showStatus(`摘要完成`)
+                      showStatus('摘要完成')
                     } else if (eventType === 'error') {
                       showStatus('摘要失败: ' + data.message)
                     }
