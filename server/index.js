@@ -39,6 +39,39 @@ app.get('/api/stats', (req, res) => {
   }
 });
 
+// Clone route uses SSE — needs raw response control before router middleware interferes
+app.post('/api/projects/clone', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'Access-Control-Allow-Origin': '*',
+  });
+
+  let cancelled = false;
+  req.on('close', () => { cancelled = true; });
+
+  function send(type, data) {
+    if (!cancelled) res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
+  const { cloneRepo } = require('./services/git-service');
+  try {
+    send('progress', { message: 'Cloning into...\n' });
+    const project = await cloneRepo(url, (msg) => {
+      send('progress', { message: msg });
+    });
+    if (!cancelled) send('done', { project });
+  } catch (err) {
+    if (!cancelled) send('error', { message: err.message });
+  }
+  if (!cancelled) res.end();
+});
+
 const projectsRouter = require('./routes/projects');
 app.use('/api/projects', projectsRouter);
 
