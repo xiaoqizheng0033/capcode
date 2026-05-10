@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { api } from '../api'
 import UpdateTimeline from '../components/UpdateTimeline'
+import CollapsibleSection from '../components/CollapsibleSection'
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -77,7 +78,6 @@ export default function ProjectDetail() {
                 const next = [...prev]
                 for (const line of progressLines) {
                   const text = line.trimEnd()
-                  const isFrom = text.startsWith('From ')
                   const isFetching = text.startsWith('remote: Compressing') || text.startsWith('remote: Counting') || text.startsWith('remote: Enumerating')
                   const isUnpacking = text.startsWith('Unpacking') || text.startsWith('Resolving deltas')
                   if (isFetching || isUnpacking) {
@@ -140,8 +140,8 @@ export default function ProjectDetail() {
         </button>
       </div>
 
-      {/* Project info */}
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+      {/* Project info - always open */}
+      <CollapsibleSection title="基本信息" defaultOpen={true}>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
             <span className="text-gray-400 dark:text-gray-500">远程地址: </span>
@@ -197,16 +197,12 @@ export default function ProjectDetail() {
             <div ref={logEndRef} />
           </div>
         )}
-      </div>
+      </CollapsibleSection>
 
-      {/* AI Summary */}
+      {/* AI Summary - collapsed if long */}
       {project.ai_summary && (
-        <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg shadow-sm border border-blue-200 dark:border-blue-800 p-4 mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-2">
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-400">AI 摘要</span>
-              项目分析
-            </h2>
+        <CollapsibleSection title="AI 摘要" defaultOpen={false}>
+          <div className="flex justify-end mb-2">
             <button
               onClick={async () => {
                 try {
@@ -226,12 +222,11 @@ export default function ProjectDetail() {
               {project.ai_summary}
             </ReactMarkdown>
           </div>
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* Description */}
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">项目介绍</h2>
+      <CollapsibleSection title="项目介绍" badge={project.readme_content ? 'README' : null} defaultOpen={false}>
         {editing ? (
           <div>
             <textarea
@@ -268,13 +263,12 @@ export default function ProjectDetail() {
             )}
           </div>
         )}
-      </div>
+      </CollapsibleSection>
 
       {/* Update history */}
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">更新历史 ({updates.length})</h2>
+      <CollapsibleSection title="更新历史" badge={updates.length} defaultOpen={false}>
         <UpdateTimeline updates={updates} />
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }
