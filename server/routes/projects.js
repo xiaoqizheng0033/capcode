@@ -125,28 +125,43 @@ router.put('/:id', (req, res) => {
   }
 });
 
-// POST /api/projects/regenerate-all-summaries
+// POST /api/projects/regenerate-all-summaries (SSE)
 router.post('/regenerate-all-summaries', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  function send(type, data) {
+    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
   try {
     const projects = db.prepare('SELECT * FROM projects WHERE is_active = 1').all();
-    if (projects.length === 0) return res.json({ message: 'No projects found' });
-    const results = [];
+    if (projects.length === 0) {
+      send('done', { message: 'No projects found', results: [] });
+      return res.end();
+    }
+
     for (const proj of projects) {
       try {
         const summary = await generateSummary(proj);
         console.log(`[Summary] ${proj.name}: ${summary.substring(0, 80)}...`);
         db.prepare("UPDATE projects SET ai_summary = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
           .run(summary, proj.id);
-        results.push({ id: proj.id, name: proj.name, status: 'success' });
+        send('progress', { id: proj.id, name: proj.name, status: 'success' });
       } catch (err) {
         console.error(`[Summary] ${proj.name} FAILED:`, err.message);
-        results.push({ id: proj.id, name: proj.name, status: 'failed', error: err.message });
+        send('progress', { id: proj.id, name: proj.name, status: 'failed', error: err.message });
       }
     }
-    res.json({ message: 'All summaries regenerated', results });
+    send('done', { message: 'All summaries regenerated' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    send('error', { message: err.message });
   }
+  res.end();
 });
 
 // POST /api/projects/auto-classify
