@@ -107,7 +107,14 @@ export default function Dashboard() {
         </button>
         <button
           onClick={async () => {
-            try { await api.autoClassify(); await loadData(); } catch (err) { console.error(err) }
+            try {
+              setLoading(true)
+              await api.autoClassify()
+              await loadData()
+            } catch (err) {
+              alert('智能分类失败: ' + err.message)
+              setLoading(false)
+            }
           }}
           className="flex items-center gap-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
         >
@@ -115,7 +122,14 @@ export default function Dashboard() {
         </button>
         <button
           onClick={async () => {
-            try { await api.regenerateAllSummaries(); await loadData(); } catch (err) { console.error(err) }
+            try {
+              setLoading(true)
+              await api.regenerateAllSummaries()
+              await loadData()
+            } catch (err) {
+              alert('生成摘要失败: ' + err.message)
+              setLoading(false)
+            }
           }}
           className="flex items-center gap-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
         >
