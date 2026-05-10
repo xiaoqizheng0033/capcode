@@ -154,45 +154,14 @@ export default function Dashboard() {
           onClick={async () => {
             try {
               showStatus('正在生成摘要...')
-              setSummaryResults([])
-
-              const res = await fetch('/api/projects/regenerate-all-summaries', { method: 'POST' })
-              const reader = res.body.getReader()
-              const decoder = new TextDecoder()
-              let buffer = ''
-
-              while (true) {
-                const { done, value } = await reader.read()
-                if (done) break
-                buffer += decoder.decode(value, { stream: true })
-                const parts = buffer.split('\n\n')
-                buffer = parts.pop() || ''
-
-                for (const part of parts) {
-                  const lines = part.split('\n')
-                  let eventType = ''
-                  let eventData = ''
-                  for (const line of lines) {
-                    if (line.startsWith('event: ')) eventType = line.slice(7)
-                    else if (line.startsWith('data: ')) eventData = line.slice(6)
-                  }
-                  if (!eventType || !eventData) continue
-                  try {
-                    const data = JSON.parse(eventData)
-                    if (eventType === 'progress') {
-                      setSummaryResults(prev => [...prev, data])
-                    } else if (eventType === 'done') {
-                      await loadData()
-                      showStatus('摘要完成')
-                    } else if (eventType === 'error') {
-                      showStatus('摘要失败: ' + data.message)
-                    }
-                  } catch {}
-                }
-              }
+              setSummaryResults(null)
+              const result = await api.regenerateAllSummaries()
+              setSummaryResults(result.results || [])
+              await loadData()
+              const ok = result.results?.filter(r => r.status === 'success').length || 0
+              showStatus(`摘要完成: ${ok}/${result.results?.length || 0}`)
             } catch (err) {
               showStatus('摘要失败: ' + err.message)
-              setSummaryResults([{ name: '请求失败', status: 'failed', error: err.message }])
             }
           }}
           className="flex items-center gap-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"

@@ -125,43 +125,26 @@ router.put('/:id', (req, res) => {
   }
 });
 
-// POST /api/projects/regenerate-all-summaries (SSE)
+// POST /api/projects/regenerate-all-summaries
 router.post('/regenerate-all-summaries', async (req, res) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-
-  function send(type, data) {
-    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
-  }
-
   try {
-    const projects = db.prepare('SELECT * FROM projects WHERE is_active = 1').all();
-    if (projects.length === 0) {
-      send('done', { message: 'No projects found', results: [] });
-      return res.end();
-    }
-
+    const projects = db.prepare("SELECT * FROM projects WHERE is_active = 1 AND (ai_summary IS NULL OR ai_summary = '')").all();
+    if (projects.length === 0) return res.json({ message: '所有项目已有摘要', results: [] });
+    const results = [];
     for (const proj of projects) {
       try {
         const summary = await generateSummary(proj);
-        console.log(`[Summary] ${proj.name}: ${summary.substring(0, 80)}...`);
         db.prepare("UPDATE projects SET ai_summary = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
           .run(summary, proj.id);
-        send('progress', { id: proj.id, name: proj.name, status: 'success' });
+        results.push({ id: proj.id, name: proj.name, status: 'success' });
       } catch (err) {
-        console.error(`[Summary] ${proj.name} FAILED:`, err.message);
-        send('progress', { id: proj.id, name: proj.name, status: 'failed', error: err.message });
+        results.push({ id: proj.id, name: proj.name, status: 'failed', error: err.message });
       }
     }
-    send('done', { message: 'All summaries regenerated' });
+    res.json({ message: '摘要生成完成', results });
   } catch (err) {
-    send('error', { message: err.message });
+    res.status(500).json({ error: err.message });
   }
-  res.end();
 });
 
 // POST /api/projects/auto-classify
