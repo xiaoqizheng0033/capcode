@@ -113,6 +113,14 @@ export default function Dashboard() {
         >
           智能分类
         </button>
+        <button
+          onClick={async () => {
+            try { await api.regenerateAllSummaries(); await loadData(); } catch (err) { console.error(err) }
+          }}
+          className="flex items-center gap-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+        >
+          生成摘要
+        </button>
       </div>
 
       {/* Project grid grouped by category */}
