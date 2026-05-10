@@ -32,7 +32,7 @@ export default function ProjectDetail() {
         api.getUpdates(id),
         api.getCategories().catch(() => []),
       ])
-      console.log('[ProjectDetail] loaded project:', p.id, 'ai_summary length:', (p.ai_summary || '').length)
+      console.log('[ProjectDetail] loaded project:', p.id, 'ai_summary:', JSON.stringify((p.ai_summary || '').substring(0, 100)))
       setProject(p)
       setUpdates(u)
       setCategories(cats)
