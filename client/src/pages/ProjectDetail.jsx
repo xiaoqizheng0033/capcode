@@ -44,6 +44,13 @@ export default function ProjectDetail() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Reload data when navigating back to this page
+  useEffect(() => {
+    const onFocus = () => loadData()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [loadData])
+
   async function handlePull() {
     setPulling(true)
     setLogs([])
