@@ -9,7 +9,7 @@ function getConfig(key) {
   return row ? row.value : null;
 }
 
-async function pullRepo(projectId) {
+async function pullRepo(projectId, onProgress) {
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
   if (!project) throw new Error('Project not found');
   if (!fs.existsSync(project.path)) throw new Error('Project directory not found');
@@ -20,27 +20,26 @@ async function pullRepo(projectId) {
   const logBefore = await git.log({ maxCount: 1 });
   const hashBefore = logBefore.latest ? logBefore.latest.hash : null;
 
-  try {
-    await git.pull({ '--ff-only': null });
-  } catch (pullErr) {
-    // Try pull with merge strategy on failure
-    try {
-      await git.pull(['-X', 'theirs']);
-    } catch (mergeErr) {
-      // Record failure
-      db.prepare(`
-        INSERT INTO update_logs (project_id, status, error_msg)
-        VALUES (?, 'failed', ?)
-      `).run(projectId, mergeErr.message);
-
-      db.prepare(`
-        UPDATE projects SET last_pull_at = datetime('now', 'localtime'), updated_at = datetime('now', 'localtime')
-        WHERE id = ?
-      `).run(projectId);
-
-      throw mergeErr;
-    }
-  }
+  // Run git pull via child_process to capture raw output
+  const { exec } = require('child_process');
+  await new Promise((resolve, reject) => {
+    const child = exec('git pull --progress', { cwd: project.path }, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+    child.stderr.on('data', (data) => {
+      const text = data.toString();
+      const filtered = text.split('\n').filter(l => {
+        const t = l.trim();
+        return t && !t.startsWith('warning:');
+      }).join('\n');
+      if (onProgress && filtered.trim()) onProgress(filtered);
+    });
+    child.stdout.on('data', (data) => {
+      const text = data.toString();
+      if (onProgress && text.trim()) onProgress(text);
+    });
+  });
 
   // Record HEAD after pull
   const logAfter = await git.log({ maxCount: 1 });

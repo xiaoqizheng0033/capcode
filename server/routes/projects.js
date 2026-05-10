@@ -85,14 +85,29 @@ router.post('/scan', async (req, res) => {
   }
 });
 
-// POST /api/projects/:id/pull - manual pull single project
+// POST /api/projects/:id/pull - manual pull single project (SSE)
 router.post('/:id/pull', async (req, res) => {
-  try {
-    const result = await pullRepo(parseInt(req.params.id));
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  function send(type, data) {
+    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
   }
+
+  try {
+    const result = await pullRepo(parseInt(req.params.id), (msg) => {
+      send('progress', { message: msg });
+    });
+    send('done', { result });
+  } catch (err) {
+    send('error', { message: err.message });
+  }
+  res.end();
 });
 
 // PUT /api/projects/:id - update project info (manual description edit)

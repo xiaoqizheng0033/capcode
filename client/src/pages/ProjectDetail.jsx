@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, ExternalLink, Download, Edit3, Check, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -13,9 +13,15 @@ export default function ProjectDetail() {
   const [updates, setUpdates] = useState([])
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
+  const [logs, setLogs] = useState([])
   const [categories, setCategories] = useState([])
   const [editing, setEditing] = useState(false)
   const [descDraft, setDescDraft] = useState('')
+  const logEndRef = useRef(null)
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [logs])
 
   const loadData = useCallback(async () => {
     try {
@@ -39,12 +45,68 @@ export default function ProjectDetail() {
 
   async function handlePull() {
     setPulling(true)
+    setLogs([])
     try {
-      await api.pullProject(id)
-      await loadData()
+      const res = await fetch(`/api/projects/${id}/pull`, { method: 'POST' })
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+
+        for (const part of parts) {
+          const lines = part.split('\n')
+          let eventType = ''
+          let eventData = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventType = line.slice(7)
+            else if (line.startsWith('data: ')) eventData = line.slice(6)
+          }
+          if (!eventType || !eventData) continue
+          try {
+            const data = JSON.parse(eventData)
+            if (eventType === 'progress') {
+              const progressLines = data.message.split('\n').filter(l => l.trim())
+              setLogs(prev => {
+                const next = [...prev]
+                for (const line of progressLines) {
+                  const text = line.trimEnd()
+                  const isFrom = text.startsWith('From ')
+                  const isFetching = text.startsWith('remote: Compressing') || text.startsWith('remote: Counting') || text.startsWith('remote: Enumerating')
+                  const isUnpacking = text.startsWith('Unpacking') || text.startsWith('Resolving deltas')
+                  if (isFetching || isUnpacking) {
+                    const key = text.split(':')[0]
+                    const lastIdx = next.length - 1
+                    if (lastIdx >= 0 && next[lastIdx]._key === key) {
+                      next[lastIdx] = { type: 'info', text, _key: key }
+                    } else {
+                      next.push({ type: 'info', text, _key: key })
+                    }
+                  } else {
+                    next.push({ type: 'info', text })
+                  }
+                }
+                return next
+              })
+            } else if (eventType === 'done') {
+              setLogs(prev => [...prev, { type: 'success', text: data.result.status === 'no_change' ? '已是最新' : `拉取完成，${data.result.commitsCount} 个新提交` }])
+              setPulling(false)
+              loadData()
+            } else if (eventType === 'error') {
+              setLogs(prev => [...prev, { type: 'error', text: data.message }])
+              setPulling(false)
+            }
+          } catch {}
+        }
+      }
     } catch (err) {
-      alert('拉取失败: ' + err.message)
-    } finally {
+      setLogs(prev => [...prev, { type: 'error', text: err.message }])
       setPulling(false)
     }
   }
@@ -123,6 +185,18 @@ export default function ProjectDetail() {
         >
           <Download size={16} /> {pulling ? '拉取中...' : '立即拉取'}
         </button>
+
+        {/* Terminal-style pull log */}
+        {logs.length > 0 && (
+          <div className="mt-3 bg-gray-950 text-green-400 rounded-md p-3 font-mono text-xs max-h-48 overflow-y-auto">
+            {logs.map((log, i) => (
+              <div key={i} className={log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-300' : 'text-green-400'}>
+                {log.type === 'info' && '> '}{log.text}
+              </div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
+        )}
       </div>
 
       {/* AI Summary */}
