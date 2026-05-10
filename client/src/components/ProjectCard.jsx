@@ -4,9 +4,19 @@ import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import StatusBadge from './StatusBadge'
 
+function extractOverview(aiSummary) {
+  if (!aiSummary) return ''
+  // Extract content after "### 项目概述" heading
+  const match = aiSummary.match(/###\s*项目概述\s*\n+([\s\S]*?)(?=\n###\s|\n##\s|$)/)
+  if (match) return match[1].trim()
+  // Fallback: return first 150 chars of ai_summary
+  return aiSummary.substring(0, 150)
+}
+
 export default function ProjectCard({ project }) {
   const navigate = useNavigate()
-  const desc = project.description || project.auto_description || '暂无介绍'
+  const overview = extractOverview(project.ai_summary)
+  const desc = overview || project.description || project.auto_description || '暂无介绍'
 
   return (
     <div
