@@ -19,7 +19,7 @@ function getColor(category) {
   return categoryColors[category] || categoryColors['其他']
 }
 
-export default function CategoryGroup({ category, projects, defaultOpen = true }) {
+export default function CategoryGroup({ category, projects, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen)
   const color = getColor(category)
 
