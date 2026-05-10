@@ -47,6 +47,34 @@ router.get('/:id', (req, res) => {
   }
 });
 
+// POST /api/projects/clone - clone new project from GitHub URL (SSE)
+router.post('/clone', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  function send(type, data) {
+    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
+  try {
+    const project = await cloneRepo(url, (msg) => {
+      send('progress', { message: msg });
+    });
+    send('done', { project });
+  } catch (err) {
+    send('error', { message: err.message });
+  }
+  res.end();
+});
+
 // POST /api/projects/scan - manual directory scan
 router.post('/scan', async (req, res) => {
   try {

@@ -111,23 +111,29 @@ async function cloneRepo(githubUrl, onProgress) {
     throw new Error(`Directory already exists: ${repoName}`);
   }
 
-  // Use spawn to capture real-time git clone progress
-  const { spawn } = require('child_process');
+  // Use child_process directly to capture raw git stderr output
+  const { exec } = require('child_process');
   await new Promise((resolve, reject) => {
-    const child = spawn('git', ['clone', githubUrl, repoName, '--progress'], {
-      cwd: basePath,
-      stdio: ['ignore', 'pipe', 'pipe'],
+    const child = exec(
+      `git clone "${githubUrl}" "${repoName}" --progress`,
+      { cwd: basePath },
+      (err, stdout, stderr) => {
+        if (err) reject(err);
+        else resolve();
+      }
+    );
+    child.stderr.on('data', (data) => {
+      const text = data.toString();
+      // Skip git warnings on Windows
+      const filtered = text.split('\n').filter(l => {
+        const t = l.trim();
+        return t && !t.startsWith('warning:') && !t.startsWith("'");
+      }).join('\n');
+      if (onProgress && filtered.trim()) onProgress(filtered);
     });
     child.stdout.on('data', (data) => {
-      if (onProgress) onProgress(data.toString());
-    });
-    child.stderr.on('data', (data) => {
-      if (onProgress) onProgress(data.toString());
-    });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`git clone exited with code ${code}`));
+      const text = data.toString();
+      if (onProgress && text.trim()) onProgress(text);
     });
   });
 
@@ -172,11 +178,28 @@ async function cloneRepo(githubUrl, onProgress) {
   const log = await targetGit.log({ maxCount: 1 });
   const lastCommit = log.latest;
 
+  const normalizedPath = path.normalize(targetPath);
+
+  // Check if project already exists (e.g. from scanner); update if so
+  const existing = db.prepare('SELECT id FROM projects WHERE path = ?').get(normalizedPath);
+  if (existing) {
+    db.prepare(`
+      UPDATE projects SET remote_url = ?, default_branch = ?, auto_description = ?, readme_content = ?,
+        last_commit_hash = ?, last_commit_date = ?, last_commit_msg = ?
+      WHERE id = ?
+    `).run(
+      remoteUrl, defaultBranch, autoDescription, readmeContent,
+      lastCommit?.hash || null, lastCommit?.date || null, lastCommit?.message || null,
+      existing.id
+    );
+    return db.prepare('SELECT * FROM projects WHERE id = ?').get(existing.id);
+  }
+
   const result = db.prepare(`
     INSERT INTO projects (name, path, remote_url, default_branch, auto_description, readme_content, last_commit_hash, last_commit_date, last_commit_msg)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    repoName, path.normalize(targetPath), remoteUrl, defaultBranch, autoDescription, readmeContent,
+    repoName, normalizedPath, remoteUrl, defaultBranch, autoDescription, readmeContent,
     lastCommit?.hash || null, lastCommit?.date || null, lastCommit?.message || null
   );
 
