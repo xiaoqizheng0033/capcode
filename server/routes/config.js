@@ -35,4 +35,56 @@ router.put('/', (req, res) => {
   }
 });
 
+// POST /api/config/test-ai - test AI API connection
+router.post('/test-ai', async (req, res) => {
+  try {
+    const https = require('https');
+    const apiKey = db.prepare("SELECT value FROM config WHERE key = 'ai_api_key'").get()?.value;
+    const apiUrl = db.prepare("SELECT value FROM config WHERE key = 'ai_api_url'").get()?.value;
+
+    if (!apiKey) return res.json({ success: false, message: 'API Key 未配置' });
+    if (!apiUrl) return res.json({ success: false, message: 'API URL 未配置' });
+
+    const url = new URL(apiUrl);
+    const body = JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: 'hi' }],
+      max_tokens: 5,
+    });
+
+    await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Length': Buffer.byteLength(body),
+        },
+        timeout: 10000,
+      }, (resp) => {
+        let data = '';
+        resp.on('data', chunk => data += chunk);
+        resp.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error) reject(new Error(parsed.error.message));
+            else resolve(parsed);
+          } catch { reject(new Error('Invalid response')); }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+      req.write(body);
+      req.end();
+    });
+
+    res.json({ success: true, message: '连接成功' });
+  } catch (err) {
+    res.json({ success: false, message: '连接失败: ' + err.message });
+  }
+});
+
 module.exports = router;

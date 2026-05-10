@@ -22,6 +22,7 @@ export const api = {
   getUpdates: (projectId) => request(`/projects/${projectId}/updates`),
   getStats: () => request('/stats'),
   getConfig: () => request('/config'),
+  testAiConnection: () => request('/config/test-ai', { method: 'POST' }),
   updateConfig: (key, value) => request('/config', { method: 'PUT', body: JSON.stringify({ key, value }) }),
   regenerateSummary: (id) => request(`/projects/${id}/regenerate-summary`, { method: 'POST' }),
   regenerateAllSummaries: () => request('/projects/regenerate-all-summaries', { method: 'POST' }),
