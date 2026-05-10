@@ -195,8 +195,8 @@ async function cloneRepo(githubUrl, onProgress) {
   }
 
   const result = db.prepare(`
-    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, readme_content, last_commit_hash, last_commit_date, last_commit_msg)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, readme_content, last_commit_hash, last_commit_date, last_commit_msg, ai_summary)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')
   `).run(
     repoName, normalizedPath, remoteUrl, defaultBranch, autoDescription, readmeContent,
     lastCommit?.hash || null, lastCommit?.date || null, lastCommit?.message || null

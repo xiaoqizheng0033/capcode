@@ -104,6 +104,8 @@ const _initPromise = (async () => {
     try {
       _db.run("ALTER TABLE projects ADD COLUMN category TEXT DEFAULT ''");
     } catch (e) {}
+    // Normalize NULL ai_summary to empty string
+    _db.run("UPDATE projects SET ai_summary = '' WHERE ai_summary IS NULL");
 
     // Insert default config values
     const cntResult = _db.exec('SELECT COUNT(*) AS cnt FROM config');
