@@ -23,4 +23,9 @@ export const api = {
   getStats: () => request('/stats'),
   getConfig: () => request('/config'),
   updateConfig: (key, value) => request('/config', { method: 'PUT', body: JSON.stringify({ key, value }) }),
+  regenerateSummary: (id) => request(`/projects/${id}/regenerate-summary`, { method: 'POST' }),
+  regenerateAllSummaries: () => request('/projects/regenerate-all-summaries', { method: 'POST' }),
+  autoClassify: () => request('/projects/auto-classify', { method: 'POST' }),
+  updateCategory: (id, category) => request(`/projects/${id}/category`, { method: 'PUT', body: JSON.stringify({ category }) }),
+  getCategories: () => request('/projects/categories'),
 };

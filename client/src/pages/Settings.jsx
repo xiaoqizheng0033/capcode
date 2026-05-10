@@ -68,6 +68,62 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* AI Settings */}
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">AI 设置 (DeepSeek)</h2>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API URL</label>
+          <input
+            type="text"
+            defaultValue={config.ai_api_url || 'https://api.deepseek.com/v1/chat/completions'}
+            onBlur={e => handleSave('ai_api_url', e.target.value)}
+            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
+          <input
+            type="password"
+            defaultValue={config.ai_api_key || ''}
+            onBlur={e => handleSave('ai_api_key', e.target.value)}
+            placeholder="sk-..."
+            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={async () => {
+              try {
+                const result = await api.regenerateAllSummaries()
+                const successCount = result.results?.filter(r => r.status === 'success').length || 0
+                handleResetMsg(`摘要生成完成: ${successCount}/${result.results?.length || 0} 成功`)
+              } catch (err) {
+                handleResetMsg('摘要生成失败: ' + err.message)
+              }
+            }}
+            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            重新生成所有摘要
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const result = await api.autoClassify()
+                handleResetMsg(`分类完成: ${result.classifications?.length || 0} 个项目已分类`)
+              } catch (err) {
+                handleResetMsg('分类失败: ' + err.message)
+              }
+            }}
+            className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            智能分类所有项目
+          </button>
+        </div>
+      </div>
+
       {/* Actions */}
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
         <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">数据库维护</h2>

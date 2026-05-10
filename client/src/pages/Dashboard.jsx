@@ -4,6 +4,7 @@ import { Search, Plus, RefreshCw, Settings, Sun, Moon } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { api } from '../api'
 import ProjectCard from '../components/ProjectCard'
+import CategoryGroup from '../components/CategoryGroup'
 import AddProjectModal from '../components/AddProjectModal'
 
 export default function Dashboard() {
@@ -104,17 +105,45 @@ export default function Dashboard() {
         >
           <RefreshCw size={16} /> 手动扫描
         </button>
+        <button
+          onClick={async () => {
+            try { await api.autoClassify(); await loadData(); } catch (err) { console.error(err) }
+          }}
+          className="flex items-center gap-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+        >
+          智能分类
+        </button>
       </div>
 
-      {/* Project grid */}
+      {/* Project grid grouped by category */}
       {loading ? (
         <p className="text-center text-gray-400 dark:text-gray-500 py-8">加载中...</p>
       ) : projects.length === 0 ? (
         <p className="text-center text-gray-400 dark:text-gray-500 py-8">暂无项目</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map(p => <ProjectCard key={p.id} project={p} />)}
-        </div>
+        (() => {
+          const grouped = {}
+          const uncategorized = []
+          for (const p of projects) {
+            if (p.category) {
+              if (!grouped[p.category]) grouped[p.category] = []
+              grouped[p.category].push(p)
+            } else {
+              uncategorized.push(p)
+            }
+          }
+          const groups = Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]))
+          return (
+            <>
+              {groups.map(([cat, projs]) => (
+                <CategoryGroup key={cat} category={cat} projects={projs} />
+              ))}
+              {uncategorized.length > 0 && (
+                <CategoryGroup key="uncategorized" category="未分类" projects={uncategorized} defaultOpen={projects.length === uncategorized.length} />
+              )}
+            </>
+          )
+        })()
       )}
 
       <AddProjectModal open={showAddModal} onClose={() => setShowAddModal(false)} onAdded={() => { setShowAddModal(false); loadData() }} />

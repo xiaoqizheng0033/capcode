@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT DEFAULT '',
   auto_description TEXT DEFAULT '',
   readme_content TEXT DEFAULT '',
+  ai_summary TEXT DEFAULT '',
+  category TEXT DEFAULT '',
   last_commit_hash TEXT,
   last_commit_date TEXT,
   last_commit_msg TEXT,
@@ -44,6 +46,8 @@ CREATE TABLE IF NOT EXISTS config (
 const DEFAULT_CONFIG = {
   scan_interval_hours: '6',
   repo_base_path: 'C:\\Myfiles\\Codes\\repos',
+  ai_api_key: '',
+  ai_api_url: 'https://api.deepseek.com/v1/chat/completions',
 };
 
 // ---------------------------------------------------------------------------
@@ -92,9 +96,14 @@ const _initPromise = (async () => {
     // Migration: add readme_content column if not exists
     try {
       _db.run("ALTER TABLE projects ADD COLUMN readme_content TEXT DEFAULT ''");
-    } catch (e) {
-      // Column already exists, ignore
-    }
+    } catch (e) {}
+    // Migration: add ai_summary and category columns if not exist
+    try {
+      _db.run("ALTER TABLE projects ADD COLUMN ai_summary TEXT DEFAULT ''");
+    } catch (e) {}
+    try {
+      _db.run("ALTER TABLE projects ADD COLUMN category TEXT DEFAULT ''");
+    } catch (e) {}
 
     // Insert default config values
     const cntResult = _db.exec('SELECT COUNT(*) AS cnt FROM config');

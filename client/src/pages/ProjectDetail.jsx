@@ -13,14 +13,20 @@ export default function ProjectDetail() {
   const [updates, setUpdates] = useState([])
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
+  const [categories, setCategories] = useState([])
   const [editing, setEditing] = useState(false)
   const [descDraft, setDescDraft] = useState('')
 
   const loadData = useCallback(async () => {
     try {
-      const [p, u] = await Promise.all([api.getProject(id), api.getUpdates(id)])
+      const [p, u, cats] = await Promise.all([
+        api.getProject(id),
+        api.getUpdates(id),
+        api.getCategories().catch(() => []),
+      ])
       setProject(p)
       setUpdates(u)
+      setCategories(cats)
       setDescDraft(p.description || p.auto_description || '')
     } catch (err) {
       console.error(err)
@@ -86,6 +92,30 @@ export default function ProjectDetail() {
           <div><span className="text-gray-400 dark:text-gray-500">最近 commit: </span><span className="text-gray-700 dark:text-gray-300 font-mono text-xs">{project.last_commit_hash?.substring(0, 8) || '-'}</span></div>
         </div>
 
+        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center gap-3">
+          <span className="text-sm text-gray-400 dark:text-gray-500">分类:</span>
+          <select
+            value={project.category || ''}
+            onChange={async (e) => {
+              try {
+                const updated = await api.updateCategory(id, e.target.value)
+                setProject(updated)
+              } catch (err) {
+                alert('分类更新失败: ' + err.message)
+              }
+            }}
+            className="text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">未分类</option>
+            {categories.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            {project.category && !categories.includes(project.category) && (
+              <option value={project.category}>{project.category}</option>
+            )}
+          </select>
+        </div>
+
         <button
           onClick={handlePull}
           disabled={pulling}
@@ -94,6 +124,36 @@ export default function ProjectDetail() {
           <Download size={16} /> {pulling ? '拉取中...' : '立即拉取'}
         </button>
       </div>
+
+      {/* AI Summary */}
+      {project.ai_summary && (
+        <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg shadow-sm border border-blue-200 dark:border-blue-800 p-4 mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-2">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-400">AI 摘要</span>
+              项目分析
+            </h2>
+            <button
+              onClick={async () => {
+                try {
+                  const updated = await api.regenerateSummary(id)
+                  setProject(updated)
+                } catch (err) {
+                  alert('重新生成失败: ' + err.message)
+                }
+              }}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              重新生成
+            </button>
+          </div>
+          <div className="markdown-body text-sm text-gray-700 dark:text-gray-300">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+              {project.ai_summary}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
 
       {/* Description */}
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">

@@ -4,6 +4,7 @@ const simpleGit = require('simple-git');
 
 const db = require('../db');
 const { translateEnToZh } = require('./translate');
+const { generateSummary, classifyProjects } = require('./ai-service');
 
 function getConfig(key) {
   const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
@@ -83,8 +84,8 @@ async function scanDirectory() {
   const updated = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, readme_content, last_commit_hash, last_commit_date, last_commit_msg)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO projects (name, path, remote_url, default_branch, auto_description, readme_content, ai_summary, category, last_commit_hash, last_commit_date, last_commit_msg)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateStmt = db.prepare(`
     UPDATE projects SET remote_url = ?, default_branch = ?, auto_description = ?, readme_content = ?, last_commit_hash = ?, last_commit_date = ?, last_commit_msg = ?, updated_at = datetime('now', 'localtime'), is_active = 1
@@ -103,7 +104,7 @@ async function scanDirectory() {
       updateStmt.run(info.remoteUrl, info.defaultBranch, info.autoDescription, info.readmeContent, info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg, normalPath);
       updated.push(dirName);
     } else {
-      insertStmt.run(dirName, normalPath, info.remoteUrl, info.defaultBranch, info.autoDescription, info.readmeContent, info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg);
+      insertStmt.run(dirName, normalPath, info.remoteUrl, info.defaultBranch, info.autoDescription, info.readmeContent, '', '', info.lastCommitHash, info.lastCommitDate, info.lastCommitMsg);
       added.push(dirName);
     }
   }
@@ -113,6 +114,38 @@ async function scanDirectory() {
   const deactivateStmt = db.prepare("UPDATE projects SET is_active = 0, updated_at = datetime('now', 'localtime') WHERE name = ?");
   for (const p of removedProjects) {
     deactivateStmt.run(p.name);
+  }
+
+  // AI processing for projects without summaries
+  const projectsWithoutSummary = db.prepare(
+    "SELECT * FROM projects WHERE is_active = 1 AND ai_summary = ''"
+  ).all();
+
+  if (projectsWithoutSummary.length > 0) {
+    console.log(`[AI] Processing ${projectsWithoutSummary.length} projects without summaries...`);
+    for (const proj of projectsWithoutSummary) {
+      try {
+        const summary = await generateSummary(proj);
+        db.prepare("UPDATE projects SET ai_summary = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
+          .run(summary, proj.id);
+        console.log(`[AI] Summary generated for: ${proj.name}`);
+      } catch (err) {
+        console.error(`[AI] Summary failed for ${proj.name}: ${err.message}`);
+      }
+    }
+
+    // Run classification
+    try {
+      const allProjects = db.prepare('SELECT id, name, auto_description, description, remote_url FROM projects WHERE is_active = 1').all();
+      const classifications = await classifyProjects(allProjects);
+      for (const c of classifications) {
+        db.prepare("UPDATE projects SET category = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
+          .run(c.category, c.id);
+      }
+      console.log(`[AI] Classification complete for ${classifications.length} projects`);
+    } catch (err) {
+      console.error(`[AI] Classification failed: ${err.message}`);
+    }
   }
 
   return { added, removed: removedProjects.map(p => p.name), updated };
