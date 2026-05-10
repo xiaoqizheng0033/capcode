@@ -80,7 +80,6 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
             } else if (eventType === 'done') {
               setLogs(prev => [...prev, { type: 'success', text: '克隆完成' }])
               setLoading(false)
-              setUrl('')
               onAdded(data.project)
             } else if (eventType === 'error') {
               setLogs(prev => [...prev, { type: 'error', text: data.message }])
