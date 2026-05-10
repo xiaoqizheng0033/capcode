@@ -58,15 +58,17 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
                 const next = [...prev]
                 for (const line of lines) {
                   const text = line.trimEnd()
-                  // Receiving/Resolving deltas: replace last line if it's the same type
-                  if (/^(Receiving|Resolving|remote:)/.test(text)) {
-                    // Find and replace last line of same prefix, or append
-                    const prefix = text.split(':')[0]
+                  // In-place update for progress lines, append for others
+                  const isReceiving = text.startsWith('Receiving objects:')
+                  const isResolving = text.startsWith('Resolving deltas:')
+                  const isCompressing = text.startsWith('remote: Compressing')
+                  if (isReceiving || isResolving || isCompressing) {
+                    const key = isReceiving ? 'Receiving' : isResolving ? 'Resolving' : 'remoteCompress'
                     const lastIdx = next.length - 1
-                    if (lastIdx >= 0 && next[lastIdx].text.startsWith(prefix)) {
-                      next[lastIdx] = { type: 'info', text }
+                    if (lastIdx >= 0 && next[lastIdx]._key === key) {
+                      next[lastIdx] = { type: 'info', text, _key: key }
                     } else {
-                      next.push({ type: 'info', text })
+                      next.push({ type: 'info', text, _key: key })
                     }
                   } else {
                     next.push({ type: 'info', text })
