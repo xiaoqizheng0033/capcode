@@ -1,8 +1,9 @@
 const BASE = '/api';
 
 async function request(url, options = {}) {
-  const res = await fetch(`${BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+  const separator = url.includes('?') ? '&' : '?';
+  const res = await fetch(`${BASE}${url}${separator}_t=${Date.now()}`, {
+    headers: { 'Content-Type': 'application/json' },
     ...options,
   });
   if (!res.ok) {
