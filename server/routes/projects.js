@@ -150,8 +150,8 @@ router.post('/regenerate-all-summaries', async (req, res) => {
 // POST /api/projects/auto-classify
 router.post('/auto-classify', async (req, res) => {
   try {
-    const projects = db.prepare('SELECT id, name, auto_description, description, remote_url FROM projects WHERE is_active = 1').all();
-    if (projects.length === 0) return res.json({ message: 'No projects to classify' });
+    const projects = db.prepare("SELECT id, name, auto_description, description, remote_url FROM projects WHERE is_active = 1 AND (category IS NULL OR category = '')").all();
+    if (projects.length === 0) return res.json({ message: '所有项目已分类' });
     const classifications = await classifyProjects(projects);
     for (const c of classifications) {
       db.prepare("UPDATE projects SET category = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
