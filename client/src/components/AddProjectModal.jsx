@@ -28,7 +28,7 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
     abortRef.current = controller
 
     try {
-      const res = await fetch('http://localhost:3456/api/projects/clone', {
+      const res = await fetch('/api/projects/clone', {
         signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
