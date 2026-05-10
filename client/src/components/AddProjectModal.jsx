@@ -53,7 +53,8 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
           try {
             const data = JSON.parse(eventData)
             if (eventType === 'progress') {
-              setLogs(prev => [...prev, { type: 'info', text: data.message }])
+              const lines = data.message.split('\n').filter(l => l.trim())
+              setLogs(prev => [...prev, ...lines.map(l => ({ type: 'info', text: l.trimEnd() }))])
             } else if (eventType === 'done') {
               setLogs(prev => [...prev, { type: 'success', text: '克隆完成' }])
               setLoading(false)

@@ -111,13 +111,26 @@ async function cloneRepo(githubUrl, onProgress) {
     throw new Error(`Directory already exists: ${repoName}`);
   }
 
-  const git = simpleGit({
-    baseDir: basePath,
-    progress: ({ method, stage, progress }) => {
-      if (onProgress) onProgress(`[${stage}] ${method}: ${progress}%`);
-    },
+  // Use child_process directly to capture raw git stderr output
+  const { exec } = require('child_process');
+  await new Promise((resolve, reject) => {
+    const child = exec(
+      `git clone "${githubUrl}" "${repoName}" --progress`,
+      { cwd: basePath },
+      (err, stdout, stderr) => {
+        if (err) reject(err);
+        else resolve();
+      }
+    );
+    child.stderr.on('data', (data) => {
+      const text = data.toString();
+      if (onProgress) onProgress(text);
+    });
+    child.stdout.on('data', (data) => {
+      const text = data.toString();
+      if (onProgress) onProgress(text);
+    });
   });
-  await git.clone(githubUrl, repoName, ['--progress']);
 
   // After clone, scan README to get description and full content
   let autoDescription = '';
