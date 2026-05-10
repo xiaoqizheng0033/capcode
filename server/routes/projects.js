@@ -60,19 +60,22 @@ router.post('/clone', async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
+  let cancelled = false;
+  req.on('close', () => { cancelled = true; });
+
   function send(type, data) {
-    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (!cancelled) res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
   }
 
   try {
     const project = await cloneRepo(url, (msg) => {
       send('progress', { message: msg });
     });
-    send('done', { project });
+    if (!cancelled) send('done', { project });
   } catch (err) {
-    send('error', { message: err.message });
+    if (!cancelled) send('error', { message: err.message });
   }
-  res.end();
+  if (!cancelled) res.end();
 });
 
 // POST /api/projects/scan - manual directory scan

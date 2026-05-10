@@ -7,6 +7,7 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
   const [error, setError] = useState('')
   const [logs, setLogs] = useState([])
   const logEndRef = useRef(null)
+  const abortRef = useRef(null)
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -23,8 +24,12 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
     setError('')
     setLogs([])
 
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
       const res = await fetch('/api/projects/clone', {
+        signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url.trim() }),
@@ -83,17 +88,27 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
         }
       }
     } catch (err) {
-      setError(err.message)
+      if (err.name !== 'AbortError') {
+        setError(err.message)
+      }
       setLoading(false)
     }
   }
 
+  function handleCancel() {
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
+    setLoading(false)
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/40 dark:bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 dark:bg-black/60 flex items-center justify-center z-50" onClick={loading ? handleCancel : onClose}>
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">添加新项目</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"><X size={20} /></button>
+          <button onClick={loading ? handleCancel : onClose} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"><X size={20} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">GitHub 地址</label>
@@ -124,7 +139,7 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
 
           {error && !logs.length && <p className="text-sm text-red-500 mt-2">{error}</p>}
           <div className="flex justify-end gap-3 mt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200" disabled={loading}>取消</button>
+            <button type="button" onClick={handleCancel} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">{loading ? '取消' : '取消'}</button>
             <button
               type="submit"
               disabled={loading || !url.trim()}
