@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [statusMsg, setStatusMsg] = useState('')
   const { theme, toggleTheme } = useTheme()
 
   const loadData = useCallback(async () => {
@@ -34,12 +35,19 @@ export default function Dashboard() {
     return () => clearTimeout(timer)
   }, [loadData])
 
+  function showStatus(msg) {
+    setStatusMsg(msg)
+    setTimeout(() => setStatusMsg(''), 4000)
+  }
+
   async function handleScan() {
     try {
+      showStatus('扫描中...')
       await api.scanProjects()
       await loadData()
+      showStatus('扫描完成')
     } catch (err) {
-      console.error(err)
+      showStatus('扫描失败: ' + err.message)
     }
   }
 
@@ -81,6 +89,14 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Status bar */}
+      {statusMsg && (
+        <div className="mb-3 px-4 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+          {statusMsg}
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1 relative">
@@ -108,12 +124,12 @@ export default function Dashboard() {
         <button
           onClick={async () => {
             try {
-              setLoading(true)
-              await api.autoClassify()
+              showStatus('正在智能分类...')
+              const result = await api.autoClassify()
               await loadData()
+              showStatus(`分类完成: ${result.classifications?.length || 0} 个项目`)
             } catch (err) {
-              alert('智能分类失败: ' + err.message)
-              setLoading(false)
+              showStatus('分类失败: ' + err.message)
             }
           }}
           className="flex items-center gap-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -123,12 +139,13 @@ export default function Dashboard() {
         <button
           onClick={async () => {
             try {
-              setLoading(true)
-              await api.regenerateAllSummaries()
+              showStatus('正在生成摘要...')
+              const result = await api.regenerateAllSummaries()
+              const ok = result.results?.filter(r => r.status === 'success').length || 0
               await loadData()
+              showStatus(`摘要完成: ${ok}/${result.results?.length || 0}`)
             } catch (err) {
-              alert('生成摘要失败: ' + err.message)
-              setLoading(false)
+              showStatus('摘要失败: ' + err.message)
             }
           }}
           className="flex items-center gap-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
