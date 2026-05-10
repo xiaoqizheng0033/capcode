@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 export default function AddProjectModal({ open, onClose, onAdded }) {
@@ -95,7 +96,7 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
     }
   }
 
-  return (
+  const modal = (
     <div className="fixed inset-0 bg-black/40 dark:bg-black/60 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
@@ -144,4 +145,6 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }
