@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Plus, RefreshCw, Settings, Sun, Moon } from 'lucide-react'
+import { Search, Plus, RefreshCw, Settings, Sun, Moon, X, Check } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { api } from '../api'
 import ProjectCard from '../components/ProjectCard'
