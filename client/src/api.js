@@ -2,7 +2,7 @@ const BASE = '/api';
 
 async function request(url, options = {}) {
   const res = await fetch(`${BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
     ...options,
   });
   if (!res.ok) {
