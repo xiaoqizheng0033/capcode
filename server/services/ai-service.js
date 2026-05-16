@@ -124,14 +124,14 @@ async function classifyProjects(projects) {
     `- id:${p.id} name:${p.name} desc:${p.auto_description || p.description || '无描述'} remote:${p.remote_url || ''}`
   ).join('\n');
 
-  const prompt = `将以下开源项目按领域/用途分类。每个项目只能属于一个类别。
-类别名称应该简洁（2-6个字），如：量化交易、AI Agent、大模型应用、开发工具、数据分析、Web框架、自动化工具、其他
+  const prompt = `将以下开源项目按领域/用途打标签。每个项目可以有1-3个标签。
+标签名称应该简洁（2-6个字），如：量化交易、AI Agent、大模型应用、开发工具、数据分析、Web框架、自动化工具、其他
 
 项目列表：
 ${projectList}
 
 请只返回 JSON 数组，不要其他内容：
-[{"id": 项目ID数字, "category": "分类名"}, ...]`;
+[{"id": 项目ID数字, "tags": ["标签1", "标签2"]}, ...]`;
 
   const content = await chatCompletion([{ role: 'user', content: prompt }]);
 
@@ -143,4 +143,4 @@ ${projectList}
   return JSON.parse(jsonStr);
 }
 
-module.exports = { generateSummary, classifyProjects };
+module.exports = { generateSummary, classifyProjects, chatCompletion };

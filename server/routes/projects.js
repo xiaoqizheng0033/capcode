@@ -5,30 +5,44 @@ const { scanDirectory } = require('../services/scanner');
 const { pullRepo, cloneRepo } = require('../services/git-service');
 const { generateSummary, classifyProjects } = require('../services/ai-service');
 
-// GET /api/projects/categories - get all distinct categories (must be before /:id)
-router.get('/categories', (req, res) => {
+// GET /api/projects/tags - get all distinct tags (must be before /:id)
+router.get('/tags', (req, res) => {
   try {
-    const cats = db.prepare(
-      "SELECT DISTINCT category FROM projects WHERE is_active = 1 AND category != '' ORDER BY category ASC"
-    ).all();
-    res.json(cats.map(c => c.category));
+    const projects = db.prepare("SELECT tags FROM projects WHERE is_active = 1 AND tags != '[]' AND tags != ''").all();
+    const tagSet = new Set();
+    for (const p of projects) {
+      try {
+        const arr = JSON.parse(p.tags || '[]');
+        arr.forEach(t => { if (t) tagSet.add(t); });
+      } catch {}
+    }
+    const tagCounts = {};
+    for (const p of projects) {
+      try {
+        const arr = JSON.parse(p.tags || '[]');
+        arr.forEach(t => { if (t) tagCounts[t] = (tagCounts[t] || 0) + 1; });
+      } catch {}
+    }
+    const allTags = db.prepare('SELECT COUNT(*) as cnt FROM projects WHERE is_active = 1').get().cnt;
+    res.json(Array.from(tagSet).sort().map(name => ({ name, count: tagCounts[name] || 0 })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/projects - list all projects
+// GET /api/projects - list all projects (without heavy readme_content)
 router.get('/', (req, res) => {
   try {
     const search = req.query.search || '';
+    const cols = 'id, name, path, remote_url, default_branch, description, auto_description, ai_summary, category, tags, last_commit_hash, last_commit_date, last_commit_msg, has_updates, last_pull_at, is_active, created_at, updated_at';
     let projects;
     if (search) {
       projects = db.prepare(`
-        SELECT * FROM projects WHERE is_active = 1 AND (name LIKE ? OR description LIKE ? OR auto_description LIKE ?)
+        SELECT ${cols} FROM projects WHERE is_active = 1 AND (name LIKE ? OR description LIKE ? OR auto_description LIKE ?)
         ORDER BY name ASC
       `).all(`%${search}%`, `%${search}%`, `%${search}%`);
     } else {
-      projects = db.prepare('SELECT * FROM projects WHERE is_active = 1 ORDER BY name ASC').all();
+      projects = db.prepare(`SELECT ${cols} FROM projects WHERE is_active = 1 ORDER BY name ASC`).all();
     }
     res.json(projects);
   } catch (err) {
@@ -41,7 +55,24 @@ router.get('/:id', (req, res) => {
   try {
     const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project not found' });
-    res.json(project);
+
+    // Extract GitHub owner from remote_url
+    let author = '';
+    if (project.remote_url) {
+      const match = project.remote_url.match(/(?:github\.com|gitee\.com)[/:]([\w.-]+)\/[\w.-]+/);
+      if (match) author = match[1];
+    }
+    // Fallback: get last commit author from git
+    if (!author) {
+      try {
+        const { execSync } = require('child_process');
+        author = execSync('git log -1 --format=%an', {
+          cwd: project.path, encoding: 'utf-8', stdio: 'pipe',
+        }).trim();
+      } catch {}
+    }
+
+    res.json({ ...project, author });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -150,12 +181,12 @@ router.post('/regenerate-all-summaries', async (req, res) => {
 // POST /api/projects/auto-classify
 router.post('/auto-classify', async (req, res) => {
   try {
-    const projects = db.prepare("SELECT id, name, auto_description, description, remote_url FROM projects WHERE is_active = 1 AND (category IS NULL OR category = '')").all();
+    const projects = db.prepare("SELECT id, name, auto_description, description, remote_url FROM projects WHERE is_active = 1 AND (tags IS NULL OR tags = '[]' OR tags = '')").all();
     if (projects.length === 0) return res.json({ message: '所有项目已分类' });
     const classifications = await classifyProjects(projects);
     for (const c of classifications) {
-      db.prepare("UPDATE projects SET category = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
-        .run(c.category, c.id);
+      db.prepare("UPDATE projects SET tags = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
+        .run(JSON.stringify(c.tags || []), c.id);
     }
     res.json({ message: 'Classification complete', classifications });
   } catch (err) {
@@ -178,15 +209,75 @@ router.post('/:id/regenerate-summary', async (req, res) => {
   }
 });
 
-// PUT /api/projects/:id/category - manual category update
-router.put('/:id/category', (req, res) => {
+// PUT /api/projects/:id/tags - manual tags update
+router.put('/:id/tags', (req, res) => {
   try {
-    const { category } = req.body;
-    if (category === undefined) return res.status(400).json({ error: 'category is required' });
-    db.prepare("UPDATE projects SET category = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
-      .run(category, req.params.id);
+    const { tags } = req.body;
+    if (tags === undefined) return res.status(400).json({ error: 'tags is required' });
+    db.prepare("UPDATE projects SET tags = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
+      .run(JSON.stringify(tags), req.params.id);
     const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
     res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/projects/:id/release - get GitHub release info for current version
+router.get('/:id/release', async (req, res) => {
+  try {
+    const project = db.prepare('SELECT remote_url, path FROM projects WHERE id = ?').get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!project.remote_url) return res.json(null);
+
+    // Extract owner/repo from remote URL
+    const match = project.remote_url.match(/github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
+    if (!match) return res.json(null);
+    const [, owner, repo] = match;
+
+    // Get the latest tag (across all branches, not just HEAD)
+    const { execSync } = require('child_process');
+    let tag;
+    try {
+      // Use taggerdate to find the most recent tag available locally
+      tag = execSync('git tag --sort=-taggerdate', {
+        cwd: project.path, encoding: 'utf-8', stdio: 'pipe',
+      }).split('\n')[0]?.trim();
+    } catch {}
+    if (!tag) return res.json(null);
+
+    // Fetch release from GitHub API
+    const release = await new Promise((resolve, reject) => {
+      const https = require('https');
+      const token = db.prepare("SELECT value FROM config WHERE key = 'github_token'").get()?.value;
+      const headers = { 'User-Agent': 'repo-manager' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const opts = {
+        hostname: 'api.github.com',
+        path: `/repos/${owner}/${repo}/releases/tags/${encodeURIComponent(tag)}`,
+        headers,
+      };
+      https.get(opts, (resp) => {
+        let data = '';
+        resp.on('data', c => data += c);
+        resp.on('end', () => {
+          if (resp.statusCode === 404) return resolve(null);
+          if (resp.statusCode !== 200) return reject(new Error(`GitHub API ${resp.statusCode}`));
+          try {
+            const r = JSON.parse(data);
+            resolve({
+              tag_name: r.tag_name,
+              name: r.name || r.tag_name,
+              published_at: r.published_at,
+              body: r.body || '',
+              html_url: r.html_url,
+            });
+          } catch { resolve(null); }
+        });
+      }).on('error', reject);
+    });
+
+    res.json(release);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

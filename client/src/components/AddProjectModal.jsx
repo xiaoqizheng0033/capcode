@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { X, ClipboardPaste } from 'lucide-react'
 
 export default function AddProjectModal({ open, onClose, onAdded }) {
   const [url, setUrl] = useState('')
@@ -103,16 +103,28 @@ export default function AddProjectModal({ open, onClose, onAdded }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"><X size={20} /></button>
         </div>
         <form onSubmit={handleSubmit}>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">GitHub 地址</label>
-          <input
-            type="text"
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            placeholder="https://github.com/user/repo.git"
-            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-            autoFocus
-            disabled={loading}
-          />
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">仓库地址</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              placeholder="https://github.com/user/repo.git 或 https://gitee.com/user/repo.git"
+              className="flex-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              autoFocus
+              disabled={loading}
+            />
+            <button type="button" onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText()
+                if (text?.trim()) setUrl(text.trim())
+              } catch {}
+            }}
+              className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-500 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+              title="粘贴剪贴板地址">
+              <ClipboardPaste size={16} />
+            </button>
+          </div>
           {repoName && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">将保存到: C:\Myfiles\Codes\repos\{repoName}</p>
           )}

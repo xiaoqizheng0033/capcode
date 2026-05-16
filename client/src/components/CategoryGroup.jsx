@@ -19,23 +19,24 @@ function getColor(category) {
   return categoryColors[category] || categoryColors['其他']
 }
 
-export default function CategoryGroup({ category, projects, defaultOpen = false }) {
+export default function CategoryGroup({ category, projects, defaultOpen = false, forceOpen }) {
   const [open, setOpen] = useState(defaultOpen)
+  const isOpen = typeof forceOpen === 'boolean' ? forceOpen : open
   const color = getColor(category)
 
   return (
     <div className="mb-5">
       <div className={`border-l-4 ${color.bar} rounded-r-lg ${color.bg} pl-3 pr-3 py-2 mb-2`}>
         <button
-          onClick={() => setOpen(!open)}
+          onClick={() => setOpen(!isOpen)}
           className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
         >
-          {open ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
+          {isOpen ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
           <span className={`font-semibold ${color.text}`}>{category}</span>
           <span className="text-sm text-gray-400 dark:text-gray-500">({projects.length})</span>
         </button>
       </div>
-      {open && (
+      {isOpen && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
           {projects.map(p => <ProjectCard key={p.id} project={p} />)}
         </div>

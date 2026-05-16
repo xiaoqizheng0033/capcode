@@ -2,3 +2,8 @@ node_modules/
 dist/
 data/
 .env
+*.db
+uploads/
+.claude/
+.DS_Store
+Thumbs.db

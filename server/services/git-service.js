@@ -70,10 +70,30 @@ async function pullRepo(projectId, onProgress) {
     author: c.author_name,
   }));
 
+  // Detect new tags/releases pushed in this pull
+  let releaseInfo = [];
+  try {
+    const { execSync } = require('child_process');
+    const tagList = execSync('git tag --sort=-creatordate', { cwd: project.path, encoding: 'utf-8' });
+    const tags = tagList.split('\n').map(t => t.trim()).filter(Boolean);
+    for (const tag of tags) {
+      // Check if tag points to a commit after hashBefore
+      try {
+        execSync(`git merge-base --is-ancestor ${hashBefore} ${tag}`, { cwd: project.path });
+        // Tag is a descendant of hashBefore — it's a new release
+        const tagMsg = execSync(`git log -1 --format=%s ${tag}`, { cwd: project.path, encoding: 'utf-8' }).trim();
+        releaseInfo.push({ tag, message: tagMsg });
+      } catch (e) {
+        // Tag is before hashBefore — skip
+        // console.log('[release] tag', tag, 'NOT in range, err:', e.message);
+      }
+    }
+  } catch {}
+
   db.prepare(`
-    INSERT INTO update_logs (project_id, commits_count, commit_log, status)
-    VALUES (?, ?, ?, 'success')
-  `).run(projectId, commits.length, JSON.stringify(commitLog));
+    INSERT INTO update_logs (project_id, commits_count, commit_log, release_info, status)
+    VALUES (?, ?, ?, ?, 'success')
+  `).run(projectId, commits.length, JSON.stringify(commitLog), JSON.stringify(releaseInfo));
 
   db.prepare(`
     UPDATE projects SET
@@ -92,11 +112,11 @@ async function pullRepo(projectId, onProgress) {
 }
 
 async function cloneRepo(githubUrl, onProgress) {
-  // Validate URL format
-  const urlPattern = /^https?:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?$/;
-  const sshPattern = /^git@github\.com:[\w.-]+\/[\w.-]+(\.git)?$/;
+  // Validate URL format (supports github.com and gitee.com)
+  const urlPattern = /^https?:\/\/(?:github\.com|gitee\.com)\/[\w.-]+\/[\w.-]+(\.git)?$/;
+  const sshPattern = /^git@(?:github\.com|gitee\.com):[\w.-]+\/[\w.-]+(\.git)?$/;
   if (!urlPattern.test(githubUrl) && !sshPattern.test(githubUrl)) {
-    throw new Error('Invalid GitHub URL format');
+    throw new Error('无效的仓库地址，仅支持 GitHub 和 Gitee');
   }
 
   // Parse repo name from URL

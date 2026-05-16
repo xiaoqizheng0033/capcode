@@ -134,15 +134,17 @@ async function scanDirectory() {
       }
     }
 
-    // Run classification
+    // Run classification (for projects without tags)
     try {
-      const allProjects = db.prepare('SELECT id, name, auto_description, description, remote_url FROM projects WHERE is_active = 1').all();
-      const classifications = await classifyProjects(allProjects);
-      for (const c of classifications) {
-        db.prepare("UPDATE projects SET category = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
-          .run(c.category, c.id);
+      const allProjects = db.prepare("SELECT id, name, auto_description, description, remote_url FROM projects WHERE is_active = 1 AND (tags IS NULL OR tags = '[]' OR tags = '')").all();
+      if (allProjects.length > 0) {
+        const classifications = await classifyProjects(allProjects);
+        for (const c of classifications) {
+          db.prepare("UPDATE projects SET tags = ?, updated_at = datetime('now', 'localtime') WHERE id = ?")
+            .run(JSON.stringify(c.tags || []), c.id);
+        }
+        console.log(`[AI] Classification complete for ${classifications.length} projects`);
       }
-      console.log(`[AI] Classification complete for ${classifications.length} projects`);
     } catch (err) {
       console.error(`[AI] Classification failed: ${err.message}`);
     }

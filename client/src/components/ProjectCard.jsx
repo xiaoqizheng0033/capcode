@@ -21,7 +21,9 @@ export default function ProjectCard({ project }) {
   return (
     <div
       className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md cursor-pointer transition-shadow"
-      onClick={() => navigate(`/project/${project.id}`)}
+      onClick={() =>
+        navigate(`/project/${project.id}`, { state: { listProject: project } })
+      }
     >
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{project.name}</h3>

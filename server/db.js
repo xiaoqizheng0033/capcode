@@ -41,6 +41,53 @@ CREATE TABLE IF NOT EXISTS config (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS prompt_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  title TEXT DEFAULT '',
+  tags TEXT DEFAULT '[]',
+  starred INTEGER DEFAULT 0,
+  categories TEXT NOT NULL DEFAULT '',
+  items_count INTEGER DEFAULT 0,
+  prompt TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS call_chains (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  query TEXT NOT NULL,
+  result TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS learn_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  type TEXT DEFAULT 'note',
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  tags TEXT DEFAULT '[]',
+  file_path TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS chat_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  title TEXT DEFAULT '',
+  file_path TEXT DEFAULT '',
+  messages TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
 `;
 
 const DEFAULT_CONFIG = {
@@ -48,6 +95,8 @@ const DEFAULT_CONFIG = {
   repo_base_path: 'C:\\Myfiles\\Codes\\repos',
   ai_api_key: '',
   ai_api_url: 'https://api.deepseek.com/v1/chat/completions',
+  github_token: '',
+  tag_set: '[]',
 };
 
 // ---------------------------------------------------------------------------
@@ -104,6 +153,29 @@ const _initPromise = (async () => {
     try {
       _db.run("ALTER TABLE projects ADD COLUMN category TEXT DEFAULT ''");
     } catch (e) {}
+    // Migration: add release_info column to update_logs
+    try {
+      _db.run("ALTER TABLE update_logs ADD COLUMN release_info TEXT DEFAULT '[]'");
+    } catch (e) {}
+    // Migration: add tags column (multi-label, JSON array)
+    try {
+      _db.run("ALTER TABLE projects ADD COLUMN tags TEXT DEFAULT '[]'");
+    } catch (e) {}
+    // Migration: add type, tags, updated_at to learn_notes
+    try { _db.run("ALTER TABLE learn_notes ADD COLUMN type TEXT DEFAULT 'note'"); } catch (e) {}
+    try { _db.run("ALTER TABLE learn_notes ADD COLUMN tags TEXT DEFAULT '[]'"); } catch (e) {}
+    try { _db.run("ALTER TABLE learn_notes ADD COLUMN updated_at TEXT DEFAULT (datetime('now', 'localtime'))"); } catch (e) {}
+    // Migration: add SM-2 review fields to learn_notes
+    try { _db.run("ALTER TABLE learn_notes ADD COLUMN easiness REAL DEFAULT 2.5"); } catch (e) {}
+    try { _db.run("ALTER TABLE learn_notes ADD COLUMN interval_days INTEGER DEFAULT 0"); } catch (e) {}
+    try { _db.run("ALTER TABLE learn_notes ADD COLUMN next_review TEXT DEFAULT (date('now','localtime'))"); } catch (e) {}
+    // Migration: prompt_history table + new columns
+    try { _db.run("CREATE TABLE IF NOT EXISTS prompt_history (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, title TEXT DEFAULT '', tags TEXT DEFAULT '[]', starred INTEGER DEFAULT 0, categories TEXT DEFAULT '', items_count INTEGER DEFAULT 0, prompt TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now', 'localtime')), updated_at TEXT DEFAULT (datetime('now', 'localtime')), FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE)"); } catch (e) {}
+    try { _db.run("ALTER TABLE prompt_history ADD COLUMN title TEXT DEFAULT ''"); } catch (e) {}
+    try { _db.run("ALTER TABLE prompt_history ADD COLUMN tags TEXT DEFAULT '[]'"); } catch (e) {}
+    try { _db.run("ALTER TABLE prompt_history ADD COLUMN starred INTEGER DEFAULT 0"); } catch (e) {}
+    try { _db.run("ALTER TABLE prompt_history ADD COLUMN updated_at TEXT DEFAULT NULL"); } catch (e) {}
+    try { _db.run("ALTER TABLE prompt_history ADD COLUMN images TEXT DEFAULT '[]'"); } catch (e) {}
     // Normalize NULL ai_summary to empty string
     _db.run("UPDATE projects SET ai_summary = '' WHERE ai_summary IS NULL");
 

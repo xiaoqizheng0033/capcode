@@ -1,12 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, Download, Edit3, Check, X } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Download, Edit3, Check, X, FileText, ChevronRight, GraduationCap } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { api } from '../api'
 import UpdateTimeline from '../components/UpdateTimeline'
 import CollapsibleSection from '../components/CollapsibleSection'
+
+
+function mergeListSummary(apiProject, listRow, routeId) {
+  if (!listRow || String(listRow.id) !== String(routeId)) return apiProject
+  const fromApi = (apiProject.ai_summary ?? '').trim()
+  const fromList = (listRow.ai_summary ?? '').trim()
+  if (!fromList || fromApi) return apiProject
+  return { ...apiProject, ai_summary: listRow.ai_summary }
+}
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -16,37 +25,52 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
   const [logs, setLogs] = useState([])
-  const [categories, setCategories] = useState([])
+  const [allTags, setAllTags] = useState([])
+  const [tagsInput, setTagsInput] = useState('')
+  const [tagsEditing, setTagsEditing] = useState(false)
   const [editing, setEditing] = useState(false)
   const [descDraft, setDescDraft] = useState('')
+  const [summarizing, setSummarizing] = useState(false)
+  const [release, setRelease] = useState(undefined) // undefined = loading, null = no release
   const logEndRef = useRef(null)
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (signal) => {
     try {
+      const opts = signal ? { signal } : {}
       const [p, u, cats] = await Promise.all([
-        api.getProject(id),
-        api.getUpdates(id),
-        api.getCategories().catch(() => []),
+        api.getProject(id, opts),
+        api.getUpdates(id, opts),
+        api.getTags(opts).catch((err) => {
+          if (err.name === 'AbortError') throw err
+          return []
+        }),
       ])
-      console.log('[ProjectDetail] loaded project:', p.id, 'keys:', Object.keys(p).join(', '), 'ai_summary:', p.ai_summary === '' ? 'EMPTY STRING' : p.ai_summary === null ? 'NULL' : `"${p.ai_summary.substring(0,50)}..."`)
-      setProject(p)
+      // Load release separately — don't block page render on GitHub API
+      api.getProjectRelease(id).then(setRelease).catch(() => {})
+      const merged = mergeListSummary(p, location.state?.listProject, id)
+      setProject(merged)
       setUpdates(u)
-      setCategories(cats)
-      setDescDraft(p.description || p.auto_description || '')
+      setAllTags(cats)
+      setDescDraft(merged.description || merged.auto_description || '')
     } catch (err) {
+      if (err.name === 'AbortError') return
       console.error(err)
     } finally {
       setLoading(false)
     }
-  }, [id])
+  }, [id, location.state?.listProject])
 
   // Reload on mount AND every route navigation to this page
-  useEffect(() => { setLoading(true); loadData() }, [loadData, location.key])
-
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    loadData(controller.signal)
+    return () => controller.abort()
+  }, [loadData, location.key])
   async function handlePull() {
     setPulling(true)
     setLogs([])
@@ -145,62 +169,146 @@ export default function ProjectDetail() {
 
       {/* Project info - always open */}
       <CollapsibleSection title="基本信息" defaultOpen={true}>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <span className="text-gray-400 dark:text-gray-500">远程地址: </span>
-            <a href={project.remote_url} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
-              {project.remote_url} <ExternalLink size={12} />
-            </a>
+        {/* Remote URL — full width */}
+        <div className="text-sm">
+          <span className="text-gray-400 dark:text-gray-500">远程地址</span>
+          <a href={project.remote_url} target="_blank" rel="noreferrer" className="ml-3 text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
+            {project.remote_url} <ExternalLink size={12} />
+          </a>
+        </div>
+
+        {/* Meta info row — compact */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+          <span className="text-gray-400 dark:text-gray-500">开发者 <span className="text-gray-700 dark:text-gray-300">{project.author || '-'}</span></span>
+          <span className="text-gray-400 dark:text-gray-500">分支 <span className="text-gray-700 dark:text-gray-300">{project.default_branch}</span></span>
+          <span className="text-gray-400 dark:text-gray-500">路径 <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">{project.path}</span></span>
+          <span className="text-gray-400 dark:text-gray-500">commit <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">{project.last_commit_hash?.substring(0, 8) || '-'}</span></span>
+        </div>
+
+        {/* Tags row */}
+        <div className="mt-3 flex items-center gap-3">
+          <span className="text-sm text-gray-400 dark:text-gray-500 flex-shrink-0">标签</span>
+          <div className="flex flex-wrap gap-1">
+            {(JSON.parse(project.tags || '[]')).map(tag => (
+              <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400">
+                {tag}
+                <button
+                  onClick={async () => {
+                    const tags = JSON.parse(project.tags || '[]').filter(t => t !== tag)
+                    const updated = await api.updateTags(id, tags)
+                    setProject(updated)
+                  }}
+                  className="hover:text-blue-900 dark:hover:text-blue-200"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={() => setTagsEditing(!tagsEditing)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-400"
+            >
+              + 添加标签
+            </button>
           </div>
-          <div><span className="text-gray-400 dark:text-gray-500">本地路径: </span><span className="text-gray-700 dark:text-gray-300">{project.path}</span></div>
-          <div><span className="text-gray-400 dark:text-gray-500">默认分支: </span><span className="text-gray-700 dark:text-gray-300">{project.default_branch}</span></div>
-          <div><span className="text-gray-400 dark:text-gray-500">最近 commit: </span><span className="text-gray-700 dark:text-gray-300 font-mono text-xs">{project.last_commit_hash?.substring(0, 8) || '-'}</span></div>
         </div>
-
-        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center gap-3">
-          <span className="text-sm text-gray-400 dark:text-gray-500">分类:</span>
-          <select
-            value={project.category || ''}
-            onChange={async (e) => {
-              try {
-                const updated = await api.updateCategory(id, e.target.value)
+        {tagsEditing && (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="text"
+              value={tagsInput}
+              onChange={e => setTagsInput(e.target.value)}
+              placeholder="输入标签名..."
+              className="flex-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter' && tagsInput.trim()) {
+                  const tags = [...new Set([...JSON.parse(project.tags || '[]'), tagsInput.trim()])]
+                  const updated = await api.updateTags(id, tags)
+                  setProject(updated)
+                  setTagsInput('')
+                }
+              }}
+            />
+            <button
+              onClick={async () => {
+                if (!tagsInput.trim()) return
+                const tags = [...new Set([...JSON.parse(project.tags || '[]'), tagsInput.trim()])]
+                const updated = await api.updateTags(id, tags)
                 setProject(updated)
-              } catch (err) {
-                alert('分类更新失败: ' + err.message)
-              }
-            }}
-            className="text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">未分类</option>
-            {categories.map(c => (
-              <option key={c} value={c}>{c}</option>
+                setTagsInput('')
+              }}
+              className="px-2 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              添加
+            </button>
+            <button onClick={() => setTagsEditing(false)} className="text-xs text-gray-400 hover:text-gray-600">取消</button>
+          </div>
+        )}
+        {tagsEditing && allTags.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {allTags.filter(t => !(JSON.parse(project.tags || '[]')).includes(t.name)).map(t => (
+              <button
+                key={t.name}
+                onClick={async () => {
+                  const tags = [...new Set([...JSON.parse(project.tags || '[]'), t.name])]
+                  const updated = await api.updateTags(id, tags)
+                  setProject(updated)
+                }}
+                className="px-2 py-0.5 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                {t.name}
+              </button>
             ))}
-            {project.category && !categories.includes(project.category) && (
-              <option value={project.category}>{project.category}</option>
-            )}
-          </select>
-        </div>
-
-        <button
-          onClick={handlePull}
-          disabled={pulling}
-          className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >
-          <Download size={16} /> {pulling ? '拉取中...' : '立即拉取'}
-        </button>
-
-        {/* Terminal-style pull log */}
-        {logs.length > 0 && (
-          <div className="mt-3 bg-gray-950 text-green-400 rounded-md p-3 font-mono text-xs max-h-48 overflow-y-auto">
-            {logs.map((log, i) => (
-              <div key={i} className={log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-300' : 'text-green-400'}>
-                {log.type === 'info' && '> '}{log.text}
-              </div>
-            ))}
-            <div ref={logEndRef} />
           </div>
         )}
       </CollapsibleSection>
+
+      {/* Actions — outside basic info */}
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          onClick={handlePull}
+          disabled={pulling}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+        >
+          <Download size={16} /> {pulling ? '拉取中...' : '立即拉取'}
+        </button>
+        <button
+          onClick={async () => {
+            setSummarizing(true)
+            try {
+              const updated = await api.regenerateSummary(id)
+              setProject(updated)
+            } catch (err) {
+              alert('摘要生成失败: ' + err.message)
+            } finally {
+              setSummarizing(false)
+            }
+          }}
+          disabled={!!project.ai_summary || summarizing}
+          title={project.ai_summary ? '摘要已存在' : '生成 AI 摘要'}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-400 text-white text-sm rounded-md disabled:opacity-50 disabled:cursor-not-allowed enabled:bg-blue-600 enabled:hover:bg-blue-700"
+        >
+          <FileText size={16} /> {summarizing ? '生成中...' : project.ai_summary ? '已生成摘要' : '生成摘要'}
+        </button>
+        <Link
+          to={`/project/${id}/learn`}
+          className="flex items-center gap-2 px-4 py-2 border border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 text-sm rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/30"
+        >
+          <GraduationCap size={16} /> 学习工作室
+        </Link>
+      </div>
+
+      {/* Terminal-style pull log */}
+      {logs.length > 0 && (
+        <div className="mb-6 bg-gray-950 text-green-400 rounded-md p-3 font-mono text-xs max-h-48 overflow-y-auto">
+          {logs.map((log, i) => (
+            <div key={i} className={log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-300' : 'text-green-400'}>
+              {log.type === 'info' && '> '}{log.text}
+            </div>
+          ))}
+          <div ref={logEndRef} />
+        </div>
+      )}
 
       {/* AI Summary - collapsed if long */}
       {project.ai_summary && (
@@ -270,7 +378,14 @@ export default function ProjectDetail() {
 
       {/* Update history */}
       <CollapsibleSection title="更新历史" badge={updates.length} defaultOpen={false}>
-        <UpdateTimeline updates={updates} />
+        <UpdateTimeline
+          updates={updates}
+          release={release}
+          onDelete={async (updateId) => {
+            await api.deleteUpdate(id, updateId)
+            setUpdates(prev => prev.filter(u => u.id !== updateId))
+          }}
+        />
       </CollapsibleSection>
     </div>
   )

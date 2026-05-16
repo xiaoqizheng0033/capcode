@@ -1,18 +1,17 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
-import { useMemo } from 'react'
+﻿import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { ThemeProvider } from './context/ThemeContext'
 import Dashboard from './pages/Dashboard'
 import ProjectDetail from './pages/ProjectDetail'
 import Settings from './pages/Settings'
+import LearnStudio from './pages/LearnStudio'
 
 function AppRoutes() {
   const location = useLocation()
-  // Force remount ProjectDetail on every navigation to ensure fresh data
-  const detailKey = useMemo(() => `${location.pathname}-${Date.now()}`, [location.key])
   return (
     <Routes>
       <Route path="/" element={<Dashboard />} />
-      <Route path="/project/:id" element={<ProjectDetail key={detailKey} />} />
+      <Route path="/project/:id" element={<ProjectDetail key={location.key} />} />
+      <Route path="/project/:id/learn" element={<LearnStudio />} />
       <Route path="/settings" element={<Settings />} />
     </Routes>
   )

@@ -1,14 +1,19 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
 
+// Disable ETag to prevent any browser-side caching of API responses
+app.set('etag', false);
+
 app.use(cors());
 app.use(express.json());
 app.use('/api', (req, res, next) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Expires', '0');
+  res.set('Pragma', 'no-cache');
   next();
 });
 
@@ -48,8 +53,18 @@ app.use('/api/projects', projectsRouter);
 
 const updatesRouter = require('./routes/updates');
 const configRouter = require('./routes/config');
+const callChainRouter = require('./routes/call-chain');
+const learnRouter = require('./routes/learn');
 app.use('/api/projects', updatesRouter);
 app.use('/api/config', configRouter);
+app.use('/api/projects', callChainRouter);
+app.use('/api/projects', learnRouter);
+
+// Serve uploaded images
+const fs = require('fs');
+const uploadDir = path.join(__dirname, '..', 'data', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+app.use('/uploads', express.static(uploadDir));
 
 // Serve static frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

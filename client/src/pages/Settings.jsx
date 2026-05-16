@@ -137,6 +137,22 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* GitHub Settings */}
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">GitHub 设置</h2>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Personal Access Token</label>
+          <input
+            type="password"
+            defaultValue={config.github_token || ''}
+            onBlur={e => handleSave('github_token', e.target.value)}
+            placeholder="ghp_..."
+            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">用于调用 GitHub API 获取 Release 信息（可选，不填则无认证限速 60次/小时）</p>
+        </div>
+      </div>
+
       {/* Actions */}
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
         <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">数据库维护</h2>
