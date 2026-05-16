@@ -164,5 +164,5 @@ capcode/
 如果这个项目对您有帮助，欢迎打赏支持 ❤️
 
 <p align="center">
-  <img src="docs/pic/wechat_pay.png" alt="微信支付" width="260">
+  <img src="docs/pic/wechat_pay.jpg" alt="微信支付" width="260">
 </p>
