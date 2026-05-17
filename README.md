@@ -74,7 +74,14 @@ AI 智能时代，个体开发者可以快速学习开源项目。但克隆下�
 ### 安装
 
 ```bash
+# GitHub（国内网络不稳定可尝试下方镜像）
 git clone https://github.com/xiaoqizheng0033/capcode.git
+
+# 国内加速镜像
+git clone https://ghproxy.com/https://github.com/xiaoqizheng0033/capcode.git
+# 或
+git clone https://gh.api.99988866.xyz/https://github.com/xiaoqizheng0033/capcode.git
+
 cd capcode
 npm install
 cd client && npm install && cd ..
