@@ -108,60 +108,83 @@ async function pullRepo(projectId, onProgress) {
     projectId
   );
 
-  return { status: 'success', commitsCount: commits.length };
+  return { status: 'success', commitsCount: commits.length, commits: commitLog };
 }
 
-async function cloneRepo(githubUrl, onProgress) {
-  // Validate URL format (supports github.com and gitee.com)
+/**
+ * Pull all active projects sequentially and aggregate results.
+ * onProgress receives stage events: { stage: 'pulling'|'pulled'|'pull-failed', project, ... }
+ * Returned results feed into AI update report generation.
+ */
+async function pullAllProjects(onProgress) {
+  const projects = db.prepare(
+    'SELECT id, name FROM projects WHERE is_active = 1 ORDER BY name COLLATE NOCASE'
+  ).all();
+
+  const results = [];
+  for (const project of projects) {
+    if (onProgress) onProgress({ stage: 'pulling', project });
+    try {
+      const r = await pullRepo(project.id, (msg) => {
+        if (onProgress) onProgress({ stage: 'pulling', project, message: msg });
+      });
+      const item = {
+        id: project.id,
+        name: project.name,
+        status: r.status, // 'success' | 'no_change'
+        commitsCount: r.commitsCount || 0,
+        commits: r.commits || [],
+      };
+      results.push(item);
+      if (onProgress) onProgress({ stage: 'pulled', project, result: item });
+    } catch (err) {
+      const item = {
+        id: project.id,
+        name: project.name,
+        status: 'failed',
+        error: err.message,
+        commitsCount: 0,
+        commits: [],
+      };
+      results.push(item);
+      if (onProgress) onProgress({ stage: 'pull-failed', project, error: err.message });
+    }
+  }
+  return results;
+}
+
+function validateRemoteUrl(githubUrl) {
   const urlPattern = /^https?:\/\/(?:github\.com|gitee\.com)\/[\w.-]+\/[\w.-]+(\.git)?$/;
   const sshPattern = /^git@(?:github\.com|gitee\.com):[\w.-]+\/[\w.-]+(\.git)?$/;
   if (!urlPattern.test(githubUrl) && !sshPattern.test(githubUrl)) {
     throw new Error('无效的仓库地址，仅支持 GitHub 和 Gitee');
   }
+}
 
-  // Parse repo name from URL
-  let repoName = githubUrl.split('/').pop().replace(/\.git$/, '');
-
+function assertPathUnderRepoBase(projectPath) {
+  const resolved = path.resolve(projectPath);
   const basePath = getConfig('repo_base_path');
   if (!basePath) throw new Error('repo_base_path not configured');
-
-  const targetPath = path.join(basePath, repoName);
-  if (fs.existsSync(targetPath)) {
-    throw new Error(`Directory already exists: ${repoName}`);
+  const baseResolved = path.resolve(basePath);
+  const norm = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const target = norm(resolved);
+  const base = norm(baseResolved);
+  if (target === base || !target.startsWith(base + path.sep)) {
+    throw new Error('Project path is outside configured repo base path');
   }
+  const relative = path.relative(baseResolved, resolved);
+  if (!relative || relative === '.' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Cannot operate on repo base path');
+  }
+  return resolved;
+}
 
-  // Use child_process directly to capture raw git stderr output
-  const { exec } = require('child_process');
-  await new Promise((resolve, reject) => {
-    const child = exec(
-      `git clone "${githubUrl}" "${repoName}" --progress`,
-      { cwd: basePath },
-      (err, stdout, stderr) => {
-        if (err) reject(err);
-        else resolve();
-      }
-    );
-    child.stderr.on('data', (data) => {
-      const text = data.toString();
-      // Skip git warnings on Windows
-      const filtered = text.split('\n').filter(l => {
-        const t = l.trim();
-        return t && !t.startsWith('warning:') && !t.startsWith("'");
-      }).join('\n');
-      if (onProgress && filtered.trim()) onProgress(filtered);
-    });
-    child.stdout.on('data', (data) => {
-      const text = data.toString();
-      if (onProgress && text.trim()) onProgress(text);
-    });
-  });
-
-  // After clone, scan README to get description and full content
+function readReadmeInfo(dirPath) {
   let autoDescription = '';
   let readmeContent = '';
   const readmeFiles = ['README.md', 'readme.md', 'README.MD', 'Readme.md', 'README'];
   for (const f of readmeFiles) {
-    const readmePath = path.join(targetPath, f);
+    const readmePath = path.join(dirPath, f);
     if (fs.existsSync(readmePath)) {
       const content = fs.readFileSync(readmePath, 'utf-8');
       readmeContent = content;
@@ -176,17 +199,103 @@ async function cloneRepo(githubUrl, onProgress) {
       break;
     }
   }
+  return { autoDescription, readmeContent };
+}
 
-  // Translate English description to Chinese
-  if (autoDescription) {
-    autoDescription = await translateEnToZh(autoDescription);
+const activeClones = new Map();
+
+function parseRepoNameFromUrl(url) {
+  validateRemoteUrl(url);
+  return url.split('/').pop().replace(/\.git$/, '');
+}
+
+function killProcessTree(child) {
+  if (!child?.pid) return;
+  if (process.platform === 'win32') {
+    const { exec } = require('child_process');
+    exec(`taskkill /pid ${child.pid} /T /F`, () => {});
+    return;
+  }
+  child.kill('SIGKILL');
+}
+
+function cleanupCloneDirectory(targetPath) {
+  if (!targetPath || !fs.existsSync(targetPath)) return false;
+  fs.rmSync(targetPath, { recursive: true, force: true });
+  return true;
+}
+
+function cancelActiveClone(repoName) {
+  const basePath = getConfig('repo_base_path');
+  if (!basePath) throw new Error('repo_base_path not configured');
+  const targetPath = path.join(path.resolve(basePath), repoName);
+  assertPathUnderRepoBase(targetPath);
+
+  const entry = activeClones.get(repoName);
+  if (entry) {
+    killProcessTree(entry.child);
+    const err = Object.assign(new Error('克隆已终止'), { code: 'CLONE_CANCELLED' });
+    entry.reject(err);
+    activeClones.delete(repoName);
   }
 
-  // Get git info
-  const targetGit = simpleGit(targetPath);
+  const deletedFromDisk = cleanupCloneDirectory(targetPath);
+  return { ok: true, repoName, deletedFromDisk, hadActiveProcess: !!entry };
+}
+
+async function runGitClone(remoteUrl, parentDir, dirName, onProgress) {
+  const { exec } = require('child_process');
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      activeClones.delete(dirName);
+      fn(value);
+    };
+
+    const child = exec(
+      `git clone "${remoteUrl}" "${dirName}" --progress`,
+      { cwd: parentDir },
+      (err) => {
+        if (err) {
+          if (err.killed) {
+            finish(reject, Object.assign(new Error('克隆已终止'), { code: 'CLONE_CANCELLED' }));
+            return;
+          }
+          finish(reject, err);
+          return;
+        }
+        finish(resolve);
+      }
+    );
+
+    activeClones.set(dirName, {
+      child,
+      targetPath: path.join(parentDir, dirName),
+      reject: (err) => finish(reject, err),
+    });
+
+    child.stderr.on('data', (data) => {
+      const text = data.toString();
+      const filtered = text.split('\n').filter(l => {
+        const t = l.trim();
+        return t && !t.startsWith('warning:') && !t.startsWith("'");
+      }).join('\n');
+      if (onProgress && filtered.trim()) onProgress(filtered);
+    });
+    child.stdout.on('data', (data) => {
+      const text = data.toString();
+      if (onProgress && text.trim()) onProgress(text);
+    });
+  });
+}
+
+async function collectGitMeta(dirPath, fallbackRemoteUrl) {
+  const targetGit = simpleGit(dirPath);
   const remotes = await targetGit.getRemotes(true);
   const origin = remotes.find(r => r.name === 'origin');
-  const remoteUrl = origin ? origin.refs.fetch : githubUrl;
+  const remoteUrl = origin ? origin.refs.fetch : fallbackRemoteUrl;
 
   let defaultBranch = 'main';
   try {
@@ -197,9 +306,39 @@ async function cloneRepo(githubUrl, onProgress) {
   const log = await targetGit.log({ maxCount: 1 });
   const lastCommit = log.latest;
 
+  return { remoteUrl, defaultBranch, lastCommit };
+}
+
+async function cloneRepo(githubUrl, onProgress) {
+  validateRemoteUrl(githubUrl);
+
+  const repoName = parseRepoNameFromUrl(githubUrl);
+
+  const basePath = getConfig('repo_base_path');
+  if (!basePath) throw new Error('repo_base_path not configured');
+
+  const targetPath = path.join(basePath, repoName);
+  if (fs.existsSync(targetPath)) {
+    throw new Error(`Directory already exists: ${repoName}`);
+  }
+
+  try {
+    await runGitClone(githubUrl, basePath, repoName, onProgress);
+  } catch (err) {
+    if (err.code !== 'CLONE_CANCELLED') {
+      cleanupCloneDirectory(targetPath);
+    }
+    throw err;
+  }
+
+  let { autoDescription, readmeContent } = readReadmeInfo(targetPath);
+  if (autoDescription) {
+    autoDescription = await translateEnToZh(autoDescription);
+  }
+
+  const { remoteUrl, defaultBranch, lastCommit } = await collectGitMeta(targetPath, githubUrl);
   const normalizedPath = path.normalize(targetPath);
 
-  // Check if project already exists (e.g. from scanner); update if so
   const existing = db.prepare('SELECT id FROM projects WHERE path = ?').get(normalizedPath);
   if (existing) {
     db.prepare(`
@@ -225,4 +364,46 @@ async function cloneRepo(githubUrl, onProgress) {
   return db.prepare('SELECT * FROM projects WHERE id = ?').get(result.lastInsertRowid);
 }
 
-module.exports = { pullRepo, cloneRepo };
+async function recloneRepo(projectId, onProgress) {
+  const project = db.prepare('SELECT * FROM projects WHERE id = ? AND is_active = 1').get(projectId);
+  if (!project) throw new Error('Project not found');
+  if (!project.remote_url) throw new Error('项目没有远程地址，无法重新克隆');
+
+  validateRemoteUrl(project.remote_url);
+
+  const folderPath = assertPathUnderRepoBase(project.path);
+  const parentDir = path.dirname(folderPath);
+  const dirName = path.basename(folderPath);
+
+  if (onProgress) onProgress('正在删除本地目录...');
+  if (fs.existsSync(folderPath)) {
+    fs.rmSync(folderPath, { recursive: true, force: true });
+  }
+
+  if (onProgress) onProgress(`正在从 ${project.remote_url} 重新克隆...`);
+  await runGitClone(project.remote_url, parentDir, dirName, onProgress);
+
+  let { autoDescription, readmeContent } = readReadmeInfo(folderPath);
+  if (autoDescription) {
+    autoDescription = await translateEnToZh(autoDescription);
+  }
+
+  const { remoteUrl, defaultBranch, lastCommit } = await collectGitMeta(folderPath, project.remote_url);
+
+  db.prepare(`
+    UPDATE projects SET
+      remote_url = ?, default_branch = ?, auto_description = ?, readme_content = ?,
+      last_commit_hash = ?, last_commit_date = ?, last_commit_msg = ?,
+      has_updates = 0, last_pull_at = datetime('now', 'localtime'),
+      updated_at = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(
+    remoteUrl, defaultBranch, autoDescription, readmeContent,
+    lastCommit?.hash || null, lastCommit?.date || null, lastCommit?.message || null,
+    projectId
+  );
+
+  return db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+}
+
+module.exports = { pullRepo, pullAllProjects, cloneRepo, recloneRepo, cancelActiveClone, parseRepoNameFromUrl };

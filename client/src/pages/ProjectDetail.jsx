@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useLocation, Link } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, Download, Edit3, Check, X, FileText, ChevronRight, GraduationCap } from 'lucide-react'
+import { useParams, useLocation, Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, ExternalLink, Download, Edit3, Check, X, FileText, ChevronRight, GraduationCap, FolderOpen, Trash2, AlertTriangle, RefreshCw, Play } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -20,6 +20,7 @@ function mergeListSummary(apiProject, listRow, routeId) {
 export default function ProjectDetail() {
   const { id } = useParams()
   const location = useLocation()
+  const navigate = useNavigate()
   const [project, setProject] = useState(null)
   const [updates, setUpdates] = useState([])
   const [loading, setLoading] = useState(true)
@@ -31,6 +32,11 @@ export default function ProjectDetail() {
   const [editing, setEditing] = useState(false)
   const [descDraft, setDescDraft] = useState('')
   const [summarizing, setSummarizing] = useState(false)
+  const [openingFolder, setOpeningFolder] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deletingPermanently, setDeletingPermanently] = useState(false)
+  const [recloning, setRecloning] = useState(false)
+  const [starting, setStarting] = useState(false)
   const [release, setRelease] = useState(undefined) // undefined = loading, null = no release
   const logEndRef = useRef(null)
 
@@ -145,6 +151,111 @@ export default function ProjectDetail() {
       setEditing(false)
     } catch (err) {
       alert('保存失败: ' + err.message)
+    }
+  }
+
+  async function handleStartProject() {
+    if (starting) return
+    setStarting(true)
+    try {
+      await api.runStartBat(id)
+    } catch (err) {
+      alert('启动失败: ' + err.message)
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  async function handleOpenFolder() {
+    if (openingFolder) return
+    setOpeningFolder(true)
+    try {
+      await api.openProjectFolder(id)
+    } catch (err) {
+      alert('打开目录失败: ' + err.message)
+    } finally {
+      setOpeningFolder(false)
+    }
+  }
+
+  async function handleReclone() {
+    if (recloning) return
+    if (!project?.remote_url) {
+      alert('该项目没有远程地址，无法重新克隆')
+      return
+    }
+    const ok = window.confirm(
+      `确定重新克隆「${project.name}」吗？\n\n将删除本地目录并重新 git clone：\n${project.path}\n\n本地未推送的修改将丢失！`
+    )
+    if (!ok) return
+    setRecloning(true)
+    setLogs([])
+    try {
+      const { project: updated } = await api.recloneProject(id, (message) => {
+        const progressLines = message.split('\n').filter(l => l.trim())
+        setLogs(prev => {
+          const next = [...prev]
+          for (const line of progressLines) {
+            const text = line.trimEnd()
+            const isReceiving = text.startsWith('Receiving objects:')
+            const isResolving = text.startsWith('Resolving deltas:')
+            const isCompressing = text.startsWith('remote: Compressing')
+            if (isReceiving || isResolving || isCompressing) {
+              const key = isReceiving ? 'Receiving' : isResolving ? 'Resolving' : 'remoteCompress'
+              const lastIdx = next.length - 1
+              if (lastIdx >= 0 && next[lastIdx]._key === key) {
+                next[lastIdx] = { type: 'info', text, _key: key }
+              } else {
+                next.push({ type: 'info', text, _key: key })
+              }
+            } else {
+              next.push({ type: 'info', text })
+            }
+          }
+          return next
+        })
+      })
+      setLogs(prev => [...prev, { type: 'success', text: '重新克隆完成' }])
+      setProject(updated)
+      setDescDraft(updated.description || updated.auto_description || '')
+      setRelease(undefined)
+      api.getProjectRelease(id).then(setRelease).catch(() => setRelease(null))
+    } catch (err) {
+      setLogs(prev => [...prev, { type: 'error', text: err.message }])
+    } finally {
+      setRecloning(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (deleting) return
+    const ok = window.confirm(
+      `确定从 CapCode 中移除「${project?.name || '该项目'}」吗？\n\n本地目录不会被删除，重新扫描后可能再次出现。`
+    )
+    if (!ok) return
+    setDeleting(true)
+    try {
+      await api.deleteProject(id)
+      navigate('/')
+    } catch (err) {
+      alert('删除失败: ' + err.message)
+      setDeleting(false)
+    }
+  }
+
+  async function handlePermanentDelete() {
+    if (deletingPermanently) return
+    const ok = window.confirm(
+      `确定彻底删除「${project?.name || '该项目'}」吗？\n\n将永久删除本地目录：\n${project?.path || ''}\n\n此操作不可恢复！`
+    )
+    if (!ok) return
+    setDeletingPermanently(true)
+    try {
+      await api.deleteProjectPermanently(id)
+      navigate('/')
+    } catch (err) {
+      alert('彻底删除失败: ' + err.message)
+      setDeletingPermanently(false)
     }
   }
 
@@ -264,7 +375,7 @@ export default function ProjectDetail() {
       </CollapsibleSection>
 
       {/* Actions — outside basic info */}
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6 flex items-center gap-3 flex-wrap">
         <button
           onClick={handlePull}
           disabled={pulling}
@@ -296,6 +407,48 @@ export default function ProjectDetail() {
         >
           <GraduationCap size={16} /> 学习工作室
         </Link>
+        <button
+          onClick={handleOpenFolder}
+          disabled={openingFolder}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+        >
+          <FolderOpen size={16} /> {openingFolder ? '打开中...' : '打开目录'}
+        </button>
+        {project.has_start_bat && (
+          <button
+            onClick={handleStartProject}
+            disabled={starting}
+            title={`运行 ${project.start_bat_path || 'start.bat'}`}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
+          >
+            <Play size={16} /> {starting ? '启动中...' : '一键启动'}
+          </button>
+        )}
+        <button
+          onClick={handleReclone}
+          disabled={recloning || !project.remote_url}
+          title={project.remote_url ? '删除本地目录并重新 git clone' : '无远程地址'}
+          className="flex items-center gap-2 px-4 py-2 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/30 disabled:opacity-50"
+        >
+          <RefreshCw size={16} className={recloning ? 'animate-spin' : ''} />
+          {recloning ? '克隆中...' : '重新克隆'}
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          title="从列表移除，保留本地目录"
+          className="flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-sm rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+        >
+          <Trash2 size={16} /> {deleting ? '移除中...' : '移除'}
+        </button>
+        <button
+          onClick={handlePermanentDelete}
+          disabled={deletingPermanently}
+          title="删除本地目录及所有项目数据"
+          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:opacity-50"
+        >
+          <AlertTriangle size={16} /> {deletingPermanently ? '删除中...' : '彻底删除'}
+        </button>
       </div>
 
       {/* Terminal-style pull log */}

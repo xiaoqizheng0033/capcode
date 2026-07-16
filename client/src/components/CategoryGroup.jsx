@@ -19,7 +19,7 @@ function getColor(category) {
   return categoryColors[category] || categoryColors['其他']
 }
 
-export default function CategoryGroup({ category, projects, defaultOpen = false, forceOpen }) {
+export default function CategoryGroup({ category, projects, defaultOpen = false, forceOpen, onProjectDeleted, onProjectUpdated }) {
   const [open, setOpen] = useState(defaultOpen)
   const isOpen = typeof forceOpen === 'boolean' ? forceOpen : open
   const color = getColor(category)
@@ -38,7 +38,9 @@ export default function CategoryGroup({ category, projects, defaultOpen = false,
       </div>
       {isOpen && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
-          {projects.map(p => <ProjectCard key={p.id} project={p} />)}
+          {projects.map(p => (
+            <ProjectCard key={p.id} project={p} onDeleted={onProjectDeleted} onUpdated={onProjectUpdated} />
+          ))}
         </div>
       )}
     </div>

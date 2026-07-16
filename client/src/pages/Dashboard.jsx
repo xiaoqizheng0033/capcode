@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Plus, RefreshCw, Settings, Sun, Moon, X, Check, ChevronsDownUp, ChevronsUpDown, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { Search, Plus, RefreshCw, Settings, Sun, Moon, X, Check, ChevronsDownUp, ChevronsUpDown, PanelLeftClose, PanelLeft, DownloadCloud } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { api } from '../api'
 import ProjectCard from '../components/ProjectCard'
 import CategoryGroup from '../components/CategoryGroup'
 import CatLogo from '../components/CatLogo'
 import AddProjectModal from '../components/AddProjectModal'
+import PullAllModal from '../components/PullAllModal'
 
 const categoryColors = {
   '量化交易': { bar: 'border-l-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/20', text: 'text-emerald-700 dark:text-emerald-400' },
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showPullAllModal, setShowPullAllModal] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
   const [summaryResults, setSummaryResults] = useState(null)
   const [globalExpand, setGlobalExpand] = useState(null)
@@ -67,6 +69,17 @@ export default function Dashboard() {
       await loadData()
       showStatus('扫描完成')
     } catch (err) { showStatus('扫描失败: ' + err.message) }
+  }
+
+  function handleProjectDeleted(projectId) {
+    setProjects(prev => prev.filter(p => p.id !== projectId))
+    setStats(s => ({ ...s, totalProjects: Math.max(0, s.totalProjects - 1) }))
+    showStatus('已从列表移除')
+  }
+
+  function handleProjectUpdated(updated) {
+    setProjects(prev => prev.map(p => (p.id === updated.id ? { ...p, ...updated } : p)))
+    showStatus(`「${updated.name}」重新克隆完成`)
   }
 
   function parseTags(p) {
@@ -214,6 +227,7 @@ export default function Dashboard() {
                 <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索项目..." className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"><Plus size={16} /> 添加项目</button>
+              <button onClick={() => setShowPullAllModal(true)} className="flex items-center gap-1 px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"><DownloadCloud size={16} /> 拉取所有更新</button>
               <button onClick={handleScan} className="flex items-center gap-1 px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"><RefreshCw size={16} /> 扫描</button>
               <button onClick={async () => { try { showStatus('正在智能分类...'); const r = await api.autoClassify(); await loadData(); showStatus(`分类完成: ${r.classifications?.length || 0} 个项目`) } catch (err) { showStatus('分类失败: ' + err.message) } }} className="flex items-center gap-1 px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md hover:bg-gray-50 dark:hover:bg-gray-800">智能分类</button>
               {!selectedTag && selectedTag !== '__has_updates' && (
@@ -252,20 +266,23 @@ export default function Dashboard() {
               <p className="text-center text-gray-400 dark:text-gray-500 py-8">{selectedTag ? '该标签下暂无项目' : '暂无项目'}</p>
             ) : selectedTag ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredProjects.map(p => <ProjectCard key={p.id} project={p} />)}
+                {filteredProjects.map(p => (
+                  <ProjectCard key={p.id} project={p} onDeleted={handleProjectDeleted} onUpdated={handleProjectUpdated} />
+                ))}
               </div>
             ) : (
               <>
                 {projectGroups.uncategorized.length > 0 && (
-                  <CategoryGroup key="uncategorized" category="未分类" projects={projectGroups.uncategorized} defaultOpen={filteredProjects.length === projectGroups.uncategorized.length} forceOpen={globalExpand} />
+                  <CategoryGroup key="uncategorized" category="未分类" projects={projectGroups.uncategorized} defaultOpen={filteredProjects.length === projectGroups.uncategorized.length} forceOpen={globalExpand} onProjectDeleted={handleProjectDeleted} onProjectUpdated={handleProjectUpdated} />
                 )}
                 {projectGroups.grouped.map(([cat, projs]) => (
-                  <CategoryGroup key={cat} category={cat} projects={projs} forceOpen={globalExpand} />
+                  <CategoryGroup key={cat} category={cat} projects={projs} forceOpen={globalExpand} onProjectDeleted={handleProjectDeleted} onProjectUpdated={handleProjectUpdated} />
                 ))}
               </>
             )}
 
             <AddProjectModal open={showAddModal} onClose={() => setShowAddModal(false)} onAdded={(project) => { setProjects(prev => [...prev, project]); setStats(s => ({ ...s, totalProjects: s.totalProjects + 1 })) }} />
+            {showPullAllModal && <PullAllModal onClose={() => { setShowPullAllModal(false); loadData() }} />}
           </div>
         </div>
       </div>

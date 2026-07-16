@@ -14,14 +14,104 @@ async function request(url, options = {}) {
   return res.json();
 }
 
+async function consumeSsePost(url, onProgress) {
+  const res = await fetch(`${BASE}${url}?_t=${Date.now()}`, { method: 'POST' });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop() || '';
+
+    for (const part of parts) {
+      const lines = part.split('\n');
+      let eventType = '';
+      let eventData = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) eventType = line.slice(7);
+        else if (line.startsWith('data: ')) eventData = line.slice(6);
+      }
+      if (!eventType || !eventData) continue;
+      const data = JSON.parse(eventData);
+      if (eventType === 'progress') {
+        onProgress?.(data.message);
+      } else if (eventType === 'done') {
+        result = data;
+      } else if (eventType === 'error') {
+        throw new Error(data.message || 'Request failed');
+      }
+    }
+  }
+
+  if (!result) throw new Error('Request failed');
+  return result;
+}
+
+/**
+ * Consume the /pull-all SSE stream. Unlike consumeSsePost, this forwards every
+ * event type (progress / pulls-done / report-generating / done / error) to onEvent
+ * as { eventType, data }, so the component can render stage-aware UI.
+ * Resolves with the `done` payload ({ results, report, summary }).
+ */
+async function consumePullAllSse(onEvent) {
+  const res = await fetch(`${BASE}/projects/pull-all?_t=${Date.now()}`, { method: 'POST' });
+  if (!res.body) throw new Error('Streaming not supported');
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop() || '';
+
+    for (const part of parts) {
+      const lines = part.split('\n');
+      let eventType = '';
+      let eventData = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) eventType = line.slice(7);
+        else if (line.startsWith('data: ')) eventData = line.slice(6);
+      }
+      if (!eventType || !eventData) continue;
+      const data = JSON.parse(eventData);
+      if (eventType === 'error') {
+        throw new Error(data.message || 'Request failed');
+      }
+      if (eventType === 'done') {
+        result = data;
+      }
+      onEvent?.({ eventType, data });
+    }
+  }
+
+  if (!result) throw new Error('Request failed');
+  return result;
+}
+
 export const api = {
   getProjects: (search, options = {}) =>
     request(`/projects${search ? `?search=${encodeURIComponent(search)}` : ''}`, options),
   getProject: (id, options = {}) => request(`/projects/${id}`, options),
   cloneProject: (url) => request('/projects/clone', { method: 'POST', body: JSON.stringify({ url }) }),
+  cancelClone: (url) => request('/projects/clone/cancel', { method: 'POST', body: JSON.stringify({ url }) }),
   pullProject: (id) => request(`/projects/${id}/pull`, { method: 'POST' }),
+  pullAllProjects: (onEvent) => consumePullAllSse(onEvent),
   scanProjects: () => request('/projects/scan', { method: 'POST' }),
   updateProject: (id, description) => request(`/projects/${id}`, { method: 'PUT', body: JSON.stringify({ description }) }),
+  openProjectFolder: (id) => request(`/projects/${id}/open-folder`, { method: 'POST' }),
+  runStartBat: (id) => request(`/projects/${id}/start-bat`, { method: 'POST' }),
+  deleteProject: (id) => request(`/projects/${id}`, { method: 'DELETE' }),
+  deleteProjectPermanently: (id) => request(`/projects/${id}/permanent`, { method: 'DELETE' }),
+  recloneProject: (id, onProgress) => consumeSsePost(`/projects/${id}/reclone`, onProgress),
   getUpdates: (projectId, options = {}) => request(`/projects/${projectId}/updates`, options),
   deleteUpdate: (projectId, updateId) => request(`/projects/${projectId}/updates/${updateId}`, { method: 'DELETE' }),
   getStats: () => request('/stats'),

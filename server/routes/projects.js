@@ -1,9 +1,93 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+const { execFile, spawn } = require('child_process');
 const db = require('../db');
 const { scanDirectory } = require('../services/scanner');
-const { pullRepo, cloneRepo } = require('../services/git-service');
-const { generateSummary, classifyProjects } = require('../services/ai-service');
+const { pullRepo, pullAllProjects, cloneRepo, recloneRepo, cancelActiveClone, parseRepoNameFromUrl } = require('../services/git-service');
+const { generateSummary, classifyProjects, generateUpdateReport, buildLocalUpdateReport } = require('../services/ai-service');
+
+function getConfig(key) {
+  const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+function resolveProjectPath(projectPath) {
+  const resolved = path.resolve(projectPath);
+  const basePath = getConfig('repo_base_path');
+  if (basePath) {
+    const baseResolved = path.resolve(basePath);
+    if (!isPathInsideBase(resolved, baseResolved)) {
+      throw new Error('Project path is outside configured repo base path');
+    }
+  }
+  if (!fs.existsSync(resolved)) {
+    throw new Error('Project directory not found');
+  }
+  return resolved;
+}
+
+function isPathInsideBase(resolvedPath, baseResolved) {
+  const norm = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const target = norm(resolvedPath);
+  const base = norm(baseResolved);
+  return target === base || target.startsWith(base + path.sep);
+}
+
+function resolveDeletableProjectPath(projectPath) {
+  const resolved = path.resolve(projectPath);
+  const basePath = getConfig('repo_base_path');
+  if (!basePath) throw new Error('repo_base_path not configured');
+  const baseResolved = path.resolve(basePath);
+  if (!isPathInsideBase(resolved, baseResolved)) {
+    throw new Error('Project path is outside configured repo base path');
+  }
+  const relative = path.relative(baseResolved, resolved);
+  if (!relative || relative === '.' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Cannot delete repo base path');
+  }
+  return resolved;
+}
+
+function getStartBatPath(projectPath) {
+  const folderPath = resolveProjectPath(projectPath);
+  const batPath = path.join(folderPath, 'start.bat');
+  if (!fs.existsSync(batPath) || !fs.statSync(batPath).isFile()) return null;
+  return batPath;
+}
+
+function launchStartBat(batPath) {
+  const folderPath = path.dirname(batPath);
+  if (process.platform !== 'win32') {
+    throw new Error('start.bat 一键启动当前仅支持 Windows');
+  }
+  const child = spawn('cmd.exe', ['/c', 'start', '', batPath], {
+    cwd: folderPath,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: false,
+  });
+  child.unref();
+}
+
+function deleteProjectDirectory(folderPath) {
+  if (!folderPath || !fs.existsSync(folderPath)) return false;
+  fs.rmSync(folderPath, { recursive: true, force: true });
+  return true;
+}
+
+function openFolderInExplorer(folderPath) {
+  return new Promise((resolve, reject) => {
+    if (process.platform === 'win32') {
+      // explorer.exe may exit with code 1 even when the folder opens successfully
+      execFile('explorer.exe', [folderPath], () => resolve());
+      return;
+    }
+    const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+    execFile(cmd, [folderPath], (err) => (err ? reject(err) : resolve()));
+  });
+}
 
 // GET /api/projects/tags - get all distinct tags (must be before /:id)
 router.get('/tags', (req, res) => {
@@ -72,9 +156,37 @@ router.get('/:id', (req, res) => {
       } catch {}
     }
 
-    res.json({ ...project, author });
+    let has_start_bat = false;
+    let start_bat_path = null;
+    try {
+      const batPath = getStartBatPath(project.path);
+      if (batPath) {
+        has_start_bat = true;
+        start_bat_path = batPath;
+      }
+    } catch {}
+
+    res.json({
+      ...project,
+      author,
+      has_start_bat,
+      start_bat_path,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/projects/clone/cancel - kill active git clone and remove partial directory
+router.post('/clone/cancel', (req, res) => {
+  try {
+    const { url, repoName: rawRepoName } = req.body || {};
+    const repoName = rawRepoName || (url ? parseRepoNameFromUrl(url) : null);
+    if (!repoName) return res.status(400).json({ error: 'url or repoName is required' });
+    const result = cancelActiveClone(repoName);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -101,7 +213,11 @@ router.post('/clone', async (req, res) => {
     });
     send('done', { project });
   } catch (err) {
-    send('error', { message: err.message });
+    if (err.code === 'CLONE_CANCELLED') {
+      send('cancelled', { message: err.message });
+    } else {
+      send('error', { message: err.message });
+    }
   }
   res.end();
 });
@@ -114,6 +230,49 @@ router.post('/scan', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// POST /api/projects/pull-all - pull all active projects, then generate AI update report (SSE)
+router.post('/pull-all', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  function send(type, data) {
+    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
+  try {
+    // Stage 1: pull all projects sequentially, streaming per-project progress
+    const results = await pullAllProjects((evt) => {
+      send('progress', evt);
+    });
+
+    const summary = {
+      total: results.length,
+      updated: results.filter(r => r.status === 'success').length,
+      noChange: results.filter(r => r.status === 'no_change').length,
+      failed: results.filter(r => r.status === 'failed').length,
+    };
+    send('pulls-done', { summary });
+
+    // Stage 2: AI report generation (with local fallback)
+    send('report-generating', {});
+    let report;
+    try {
+      report = await generateUpdateReport(results);
+    } catch (err) {
+      // AI unavailable / failed — degrade gracefully to locally-built report
+      report = buildLocalUpdateReport(results) + `\n> ⚠️ AI 报告生成失败：${err.message}（以下为本地汇总）\n`;
+    }
+    send('done', { results, report, summary });
+  } catch (err) {
+    send('error', { message: err.message });
+  }
+  res.end();
 });
 
 // POST /api/projects/:id/pull - manual pull single project (SSE)
@@ -139,6 +298,94 @@ router.post('/:id/pull', async (req, res) => {
     send('error', { message: err.message });
   }
   res.end();
+});
+
+// POST /api/projects/:id/reclone - delete local dir and git clone again (SSE)
+router.post('/:id/reclone', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  function send(type, data) {
+    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
+  try {
+    const project = await recloneRepo(parseInt(req.params.id), (msg) => {
+      send('progress', { message: msg });
+    });
+    send('done', { project });
+  } catch (err) {
+    send('error', { message: err.message });
+  }
+  res.end();
+});
+
+// POST /api/projects/:id/start-bat - run start.bat in project root (new window)
+router.post('/:id/start-bat', (req, res) => {
+  try {
+    const project = db.prepare('SELECT id, path FROM projects WHERE id = ? AND is_active = 1').get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const batPath = getStartBatPath(project.path);
+    if (!batPath) return res.status(404).json({ error: '项目根目录未找到 start.bat' });
+    launchStartBat(batPath);
+    res.json({ ok: true, path: batPath });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/projects/:id/open-folder - open project directory in file explorer
+router.post('/:id/open-folder', async (req, res) => {
+  try {
+    const project = db.prepare('SELECT id, path FROM projects WHERE id = ? AND is_active = 1').get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const folderPath = resolveProjectPath(project.path);
+    await openFolderInExplorer(folderPath);
+    res.json({ ok: true, path: folderPath });
+  } catch (err) {
+    res.status(err.message.includes('not found') ? 404 : 400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/projects/:id/permanent - remove project and delete files on disk
+router.delete('/:id/permanent', (req, res) => {
+  try {
+    const project = db.prepare('SELECT id, name, path FROM projects WHERE id = ? AND is_active = 1').get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const folderPath = resolveDeletableProjectPath(project.path);
+    const deletedFromDisk = deleteProjectDirectory(folderPath);
+    db.prepare('DELETE FROM projects WHERE id = ?').run(project.id);
+
+    res.json({
+      ok: true,
+      id: project.id,
+      name: project.name,
+      path: folderPath,
+      deletedFromDisk,
+    });
+  } catch (err) {
+    const status = err.message.includes('not found') ? 404 : 400;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// DELETE /api/projects/:id - remove project from manager (soft delete, keeps files on disk)
+router.delete('/:id', (req, res) => {
+  try {
+    const project = db.prepare('SELECT id, name FROM projects WHERE id = ? AND is_active = 1').get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    db.prepare(`
+      UPDATE projects SET is_active = 0, updated_at = datetime('now', 'localtime') WHERE id = ?
+    `).run(project.id);
+    res.json({ ok: true, id: project.id, name: project.name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PUT /api/projects/:id - update project info (manual description edit)
